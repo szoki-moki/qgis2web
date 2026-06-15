@@ -8,6 +8,9 @@ QGIS plugin to export your project to an OpenLayers or Leaflet webmap.</br>
 It replicates as many aspects of the project as it can, including layers, extent and styles (including categorized and graduated).</br>
 No server-side software required.
 
+<h2>Video Tutorial</h2>
+https://youtu.be/awtDDj6p6cc
+
 <h2>Installation</h2>
 <ul>
     <li>In QGIS, select <code>Plugins > Manage and Install Plugins...</code></li>
