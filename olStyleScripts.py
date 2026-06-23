@@ -83,7 +83,8 @@ def exportStyles(layers, folder, clustered, feedback):
                 style = """
     var style = [ new ol.style.Style({
         text: createTextStyle(feature, resolution, labelText, labelFont,
-                              labelFill, placement, bufferColor, bufferWidth)
+                              labelFill, placement, bufferColor, bufferWidth,
+                              textAlign, offsetX, offsetY, overflow, repeat)
     })];"""
                 useMapUnits = False
 
@@ -93,12 +94,14 @@ def exportStyles(layers, folder, clustered, feedback):
                 else:
                     mapUnitLayers.append(safeName(vts))
             (labelRes, size, face, color,
-             bufferColor, bufferWidth) = getLabelFormat(layer)
+             bufferColor, bufferWidth, textAlign, offsetX, 
+             offsetY, overflow, repeat) = getLabelFormat(layer)
             if style != "":
                 geom = TYPE_MAP[layer.wkbType()].replace("Multi", "")
                 style = getStyle(style, cluster, labelRes, labelText,
                                  sln, size, face, color, bufferColor,
-                                 bufferWidth, value, geom)
+                                 bufferWidth, value, geom, textAlign, offsetX,
+                                 offsetY, overflow, repeat)
             else:
                 style = "''"
         except Exception:
@@ -205,6 +208,11 @@ def getLabelFormat(layer):
     # bold = layer.customProperty("labeling/fontWeight")
     bufferColor = ""
     bufferWidth = 0
+    textAlign = "'left'"
+    offsetX = 8
+    offsetY = 3
+    repeat = 0
+    overflow = "false"
     try:
         color = layer.labeling().settings().format().color().name()
     except:
@@ -213,6 +221,92 @@ def getLabelFormat(layer):
     face = ","
     if labelling is not None:
         palyr = labelling.settings()
+
+        placement = palyr.placement
+        if placement == 1: # Offset from point
+            quadrant = palyr.quadOffset
+            offsetX = palyr.xOffset
+            offsetY = palyr.yOffset
+            if quadrant == 0: # Top Left
+                textAlign = "'right'"
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = -8
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = -8 + palyr.yOffset * 3
+            elif quadrant == 1: # Top Center
+                textAlign = "'center'"
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = -8
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = -8 + palyr.yOffset * 3
+            elif quadrant == 2: # Top Right
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = -8
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = -8 + palyr.yOffset * 3
+            elif quadrant == 3: # Middle Left
+                textAlign = "'right'"
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = 0
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = 0 + palyr.yOffset * 3
+            elif quadrant == 4: # Middle Center
+                textAlign = "'center'"
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = 0
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = 0 + palyr.yOffset * 3
+            elif quadrant == 5: # Middle Right
+                textAlign = "'left'"
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = 0
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = 0 + palyr.yOffset * 3
+            elif quadrant == 6: # Bottom Left
+                textAlign = "'right'"
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = 11
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = 11 + palyr.yOffset * 3
+            elif quadrant == 7: # Bottom Center
+                textAlign = "'center'"
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = 11
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = 11 + palyr.yOffset * 3
+            elif quadrant == 8: # Bottom Right
+                if offsetX == 0 and offsetY == 0:
+                    offsetX = 0
+                    offsetY = 11
+                else:
+                    offsetX = 0 + palyr.xOffset * 3
+                    offsetY = 11 + palyr.yOffset * 3
+            
+        # acquisisco l'opzione overlapping labels della tab rendering
+        placement_settings = palyr.placementSettings()
+        overlap = placement_settings.overlapHandling()
+        if overlap == 1 or overlap == 2:
+            overflow = "true"
+
+        # se palyr.repeatDistance esiste la acquisisco l'opzione di ripetizione delle etichette
+        repeat = palyr.repeatDistance * 3 if palyr.repeatDistance > 0 else 0
+
         labelFormat = palyr.format()
         labelFont = labelFormat.font()
         face = labelFont.family()
@@ -238,7 +332,7 @@ def getLabelFormat(layer):
             bufferWidth = labelBuffer.size()
     else:
         labelRes = ""
-    return (labelRes, size, face, color, bufferColor, bufferWidth)
+    return (labelRes, size, face, color, bufferColor, bufferWidth, textAlign, offsetX, offsetY, overflow, repeat)
 
 
 def getLegendIconAndAnchors(symbol, sln, legendFolder):
@@ -344,9 +438,9 @@ def categorized(defs, sln, layer, renderer, legendFolder, stylesFolder,
     defs += """
 function categories_%s(feature, value, size, resolution, labelText,
                        labelFont, labelFill, bufferColor, bufferWidth,
-                       placement) {
-                var valueStr = (value !== null && value !== undefined) ? value.toString() : 'default';
-                switch(valueStr) {""" % sln
+                       placement, textAlign, offsetX, offsetY, overflow, repeat) {
+    var valueStr = (value !== null && value !== undefined) ? value.toString() : 'default';
+    switch(valueStr) {""" % sln
     cats = []
     useAnyMapUnits = False
     for cnt, cat in enumerate(renderer.categories()):
@@ -378,7 +472,7 @@ function categories_%s(feature, value, size, resolution, labelText,
     style = """
     var style = categories_%s(feature, value, size, resolution, labelText,
                             labelFont, labelFill, bufferColor,
-                            bufferWidth, placement)""" % sln
+                            bufferWidth, placement, textAlign, offsetX, offsetY, overflow, repeat)""" % sln
     value = getValue(layer, renderer)
     return (style, pattern, setPattern, value, defs, useAnyMapUnits)
 
@@ -469,7 +563,8 @@ def getValue(layer, renderer):
 
 
 def getStyle(style, cluster, labelRes, labelText, sln, size,
-             face, color, bufferColor, bufferWidth, value, geom):
+             face, color, bufferColor, bufferWidth, value, geom,
+             textAlign, offsetX, offsetY, overflow, repeat):
     placement = "point"
     if geom == "LineString":
         placement = "line"
@@ -486,9 +581,11 @@ def getStyle(style, cluster, labelRes, labelText, sln, size,
     var labelFill = "%(labelFill)s";
     var bufferColor = "%(bufferColor)s";
     var bufferWidth = %(bufferWidth)s;
-    var textAlign = "center";
-    var offsetX = 15;
-    var offsetY = 10;
+    var textAlign = %(textAlign)s;
+    var offsetX = %(offsetX)s;
+    var offsetY = %(offsetY)s;
+    var overflow = %(overflow)s;
+    var repeat = %(repeat)s;
     var feature
 	var value
     var clusteredFeatures = feature.get("features");
@@ -542,7 +639,8 @@ def getStyle(style, cluster, labelRes, labelText, sln, size,
 	}
     %(style)s;\n''' % {"style": style, "labelRes": labelRes, "label": labelText, "size": size, "face": face,
             "labelFill": color, "bufferColor": bufferColor,
-            "bufferWidth": bufferWidth * 3, "value": value.replace('"', '\\"')}
+            "bufferWidth": bufferWidth * 3, "value": value.replace('"', '\\"'),
+            "textAlign": textAlign, "offsetX": offsetX, "offsetY": offsetY, "overflow": overflow, "repeat": repeat}
     else:
         this_style += '''
     var value = feature.get("%(value)s");
@@ -550,9 +648,11 @@ def getStyle(style, cluster, labelRes, labelText, sln, size,
     var labelFill = "%(labelFill)s";
     var bufferColor = "%(bufferColor)s";
     var bufferWidth = %(bufferWidth)s;
-    var textAlign = "left";
-    var offsetX = 0;
-    var offsetY = 0;
+    var textAlign = %(textAlign)s;
+    var offsetX = %(offsetX)s;
+    var offsetY = %(offsetY)s;
+    var overflow = %(overflow)s;
+    var repeat = %(repeat)s;
     var placement = '%(placement)s';
     if (%(label)s !== null%(labelRes)s) {
         labelText = String(%(label)s);
@@ -560,7 +660,8 @@ def getStyle(style, cluster, labelRes, labelText, sln, size,
     %(style)s;\n''' % {"style": style, "placement": placement,
                     "labelRes": labelRes, "label": labelText, "size": size,
                     "face": face, "labelFill": color, "value": value.replace('"', '\\"'),
-                    "bufferColor": bufferColor, "bufferWidth": bufferWidth * 3}
+                    "bufferColor": bufferColor, "bufferWidth": bufferWidth * 3, 
+                    "textAlign": textAlign, "offsetX": offsetX, "offsetY": offsetY, "overflow": overflow, "repeat": repeat}
 
     this_style += '''
     return style;
@@ -811,7 +912,7 @@ def getSymbolAsStyle(symbol, stylesFolder, layer_transparency, renderer, sln,
             ts = """
         text: createTextStyle(feature, resolution, labelText, labelFont,
                               labelFill, placement, bufferColor,
-                              bufferWidth)"""
+                              bufferWidth, textAlign, offsetX, offsetY, overflow, repeat)"""
         styles[k] = '''new ol.style.Style({
         %s%s
     })''' % (style, ts)
