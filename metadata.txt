@@ -26,7 +26,7 @@ about=
 author=Andrea Ordonselli, Tom Chadwin, Riccardo Klinger, Victor Olaya, Nyall Dawson
 email=info@opengis.it
 
-version=4.2.0
+version=4.2.1
 
 # end of mandatory metadata
 
@@ -34,6 +34,7 @@ version=4.2.0
 
 # Uncomment the following line and add your changelog entries:
 changelog=
+    2026/06/26 4.2.1 Openlayers and Leaflet: Implemented string functions for rule based simbology [thanks to @alor-doy] - Openlayers: Support for categorized merged simbology [thanks to @alor-doy]
     2026/06/23 4.2.0 Support for label placement in the 9 quadrants and Offset settings, set in Placement Mode > Offset from point - Support for labels that overlap and extend beyond polygons, set in Rendering > Overlapping labels > Allow Overlaps - Support for labels that repeat along a line, set in Placement > Repeating labels
     2026/05/11 4.1.4 Add a safe loader for Qt .ui files that temporarily removes potentially polluting XML modules (e.g. lxml, defusedxml, xml.etree.*) from sys.modules before importing qgis.PyQt.uic.loadUiType, then restores them. Move FORM_CLASS initialization to use this safe loader and ensure package path is appended. Also remove the global call to defusedxml.defuse_stdlib() in olStyleScripts.py to avoid altering stdlib XML behavior. These changes prevent third-party XML libraries from breaking uic.loadUiType while preserving module state.
     2026/04/28 4.1.3 Bugfix Leaflet CSS (thanks to @dmbekker) - Support for OpenFreeMap https://github.com/hyperknot/openfreemap, which runs locally without a web server (see WIKI https://qgis2web.github.io/qgis2web/#setBasemaps for usage) - New graphic for openlayers attribution

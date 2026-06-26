@@ -433,8 +433,7 @@ def singleSymbol(renderer, stylesFolder, layer_alpha, sln, legendFolder,
     return (style, pattern, setPattern, value, useMapUnits)
 
 
-def categorized(defs, sln, layer, renderer, legendFolder, stylesFolder,
-                layer_alpha, feedback):
+def categorized(defs, sln, layer, renderer, legendFolder, stylesFolder, layer_alpha, feedback):
     defs += """
 function categories_%s(feature, value, size, resolution, labelText,
                        labelFont, labelFill, bufferColor, bufferWidth,
@@ -447,32 +446,41 @@ function categories_%s(feature, value, size, resolution, labelText,
         symbol = cat.symbol()
         
         getLegendIconAndAnchors(symbol, sln + "_" + str(cnt), legendFolder)
-        
+
         if cat.value() is not None and cat.value() != "":
             value = cat.value()
-            if isinstance(value, float) and value.is_integer():
-                # Format decimal numbers without trailing zeroes
-                value_str = str(int(value))
-            else:
-                value_str = str(value)
-            categoryStr = "case '%s':" % value_str.replace("'", "\\'")
+            categoryStr = ""
+            if isinstance(value, (list, tuple)): # "merged simbologies"
+                for v in value:
+                    if isinstance(v, float) and v.is_integer():
+                        v_str = str(int(v))
+                    else:
+                        v_str = str(v)
+                    categoryStr += """
+        case '%s':\n""" % v_str.replace("'", "\\'")
+            else: # "single simbologies"
+                if isinstance(value, float) and value.is_integer():
+                    value_str = str(int(value))
+                else:
+                    value_str = str(value)
+                categoryStr = """
+        case '%s':""" % value_str.replace("'", "\\'")
         else:
             categoryStr = "default:"
         (style, pattern, setPattern,
-         useMapUnits) = (getSymbolAsStyle(symbol, stylesFolder,
-                                          layer_alpha, renderer, sln, layer,
+         useMapUnits) = (getSymbolAsStyle(symbol, stylesFolder, layer_alpha, renderer, sln, layer,
                                           feedback))
         if useMapUnits:
             useAnyMapUnits = True
-        categoryStr += '''
-                    return %s;
-                    break;''' % style
+        categoryStr += """
+            return %s;
+			break;""" % style
         cats.append(categoryStr)
-    defs += "\n".join(cats) + "}};"
+    defs += "\n".join(cats) + "\n    }};"
     style = """
     var style = categories_%s(feature, value, size, resolution, labelText,
-                            labelFont, labelFill, bufferColor,
-                            bufferWidth, placement, textAlign, offsetX, offsetY, overflow, repeat)""" % sln
+                          labelFont, labelFill, bufferColor,
+                          bufferWidth, placement, textAlign, offsetX, offsetY, overflow, repeat)""" % sln
     value = getValue(layer, renderer)
     return (style, pattern, setPattern, value, defs, useAnyMapUnits)
 
