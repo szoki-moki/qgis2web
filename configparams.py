@@ -31,13 +31,18 @@ def getTemplates():
         shutil.copytree(src, dst)
     else:
         for fname in os.listdir(src):
-            with open(os.path.join(src, fname)) as s:
+            src_path = os.path.join(src, fname)
+            dst_path = os.path.join(dst, os.path.basename(fname))
+            # Skip directories (e.g. server_launchers) and non-HTML files
+            if os.path.isdir(src_path) or not fname.endswith(".html"):
+                continue
+            with open(src_path) as s:
                 srcCode = s.read()
-            with open(os.path.join(dst, os.path.basename(fname)), 'w') as d:
+            with open(dst_path, 'w') as d:
                 d.seek(0)
                 d.write(srcCode)
                 d.truncate()
-    return tuple(f[:f.find(".")] for f in os.listdir(dst)
+    return tuple(f[:f.find(".")] for f in reversed(os.listdir(dst))
                  if f.endswith("html"))
 
 

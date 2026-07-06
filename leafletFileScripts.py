@@ -491,7 +491,11 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             display: flex;
             justify-content: center;
             align-items: center;
-        }"""
+        }
+        .leaflet-marker-icon{
+            white-space: nowrap;
+        }
+        """
         if (layersList == "Collapsed"):
             text +="""
         .leaflet-control-layers-expanded .leaflet-control-layers-toggle {
@@ -509,6 +513,7 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
                 shadow_text = ",\n                ".join(shadows)
                 text += f"""
         .css_{safeLayerName} {{
+            pointer-events: none!important;
             text-shadow: {shadow_text};
         }}"""
         f_css.write(text)

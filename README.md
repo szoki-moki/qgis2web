@@ -6,7 +6,9 @@
 
 QGIS plugin to export your project to an OpenLayers or Leaflet webmap.</br>
 It replicates as many aspects of the project as it can, including layers, extent and styles (including categorized and graduated).</br>
-No server-side software required.
+No server-side software required for GeoJSON export.</br>
+PBF vector tile export includes a local server launcher (Python required).
+
 
 <h2>Video Tutorial</h2>
 https://youtu.be/awtDDj6p6cc

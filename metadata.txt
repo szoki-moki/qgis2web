@@ -15,7 +15,7 @@ qgisMaximumVersion=4.99
 #supportsQt6=True
 description=Export to an OpenLayers/Leaflet webmap
 about=
- QGIS plugin to export your project to an OpenLayers or Leaflet webmap. It replicates as many aspects of the project as it can, including layers, extent and styles (including categorized and graduated). No server-side software required.
+ QGIS plugin to export your project to an OpenLayers or Leaflet webmap. It replicates as many aspects of the project as it can, including layers, extent and styles (including categorized and graduated). No server-side software required for GeoJSON export. PBF vector tile export includes a local server launcher (Python required).
  
  Please consider a small donation at https://www.opengis.it/buy-me-a-coffee/
  Even a modest "virtual coffee" can help support our commitment to providing quality software.
@@ -26,7 +26,7 @@ about=
 author=Andrea Ordonselli, Tom Chadwin, Riccardo Klinger, Victor Olaya, Nyall Dawson
 email=info@opengis.it
 
-version=4.2.1
+version=4.3.0
 
 # end of mandatory metadata
 
@@ -34,6 +34,7 @@ version=4.2.1
 
 # Uncomment the following line and add your changelog entries:
 changelog=
+    2026/07/06 4.3.0 OpenLayers and Leaflet: Support for exporting layers as PBF Vector Tile in MVT format [for heavy layers] (layer search and attribute filter are disabled for these layers) - When a layer is exported as PBF, 3 scripts plus a .py file will be placed alongside index.html to start a local web server for previewing the map; a README.txt file explains everything - OpenLayers: Vector Tile PBF: Support is natively provided by OpenLayers - Leaflet: Vector Tile PBF: Updated Leaflet.VectorGrid.js library to v1.3.0 and applied a local patch to scale styles based on zoom level, plus a fallback style for renderers other than "single symbol" - Vector Tile PBF: Patched to display labels and popups for PBF layers (label visibility synced with the parent layer)
     2026/06/26 4.2.1 Openlayers and Leaflet: Implemented string functions for rule based simbology [thanks to @alor-doy] - Openlayers: Support for categorized merged simbology [thanks to @alor-doy]
     2026/06/23 4.2.0 Support for label placement in the 9 quadrants and Offset settings, set in Placement Mode > Offset from point - Support for labels that overlap and extend beyond polygons, set in Rendering > Overlapping labels > Allow Overlaps - Support for labels that repeat along a line, set in Placement > Repeating labels
     2026/05/11 4.1.4 Add a safe loader for Qt .ui files that temporarily removes potentially polluting XML modules (e.g. lxml, defusedxml, xml.etree.*) from sys.modules before importing qgis.PyQt.uic.loadUiType, then restores them. Move FORM_CLASS initialization to use this safe loader and ensure package path is appended. Also remove the global call to defusedxml.defuse_stdlib() in olStyleScripts.py to avoid altering stdlib XML behavior. These changes prevent third-party XML libraries from breaking uic.loadUiType while preserving module state.

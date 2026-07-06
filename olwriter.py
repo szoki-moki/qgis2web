@@ -94,6 +94,7 @@ class OpenLayersWriter(Writer):
                                          interactive=self.interactive,
                                          json=self.json,
                                          clustered=self.cluster,
+                                         pbfVectorTile=self.pbfVectorTile,
                                          getFeatureInfo=self.getFeatureInfo,
                                          baseMap=self.baseMap,
                                          settings=self.params,
@@ -107,7 +108,7 @@ class OpenLayersWriter(Writer):
 
     @classmethod
     def writeOL(cls, iface, feedback, layers, groups, collapsedGroup, popup, visible,
-                interactive, json, clustered, getFeatureInfo, baseMap, settings,
+                interactive, json, clustered, pbfVectorTile, getFeatureInfo, baseMap, settings,
                 folder):
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
         mapSettings = iface.mapCanvas().mapSettings()
@@ -118,6 +119,10 @@ class OpenLayersWriter(Writer):
         precision = settings["Data export"]["Precision"]
         optimize = settings["Data export"]["Minify GeoJSON files"]
         matchCRS = settings["Scale/Zoom"]["Match project CRS"]
+        # If any layer uses PBF vector tiles, force matchCRS to False
+        # because PBF tiles are always in EPSG:3857 and cannot be reprojected
+        if any(pbf_enabled for pbf_enabled, _, _ in pbfVectorTile):
+            matchCRS = False
         extent = settings["Scale/Zoom"]["Extent"]
         mapbounds = bounds(iface, extent == "Canvas extent", layers, matchCRS)
         fullextent = bounds(iface, False, layers, matchCRS)
@@ -139,14 +144,14 @@ class OpenLayersWriter(Writer):
 
         writeFiles(folder, restrictToExtent, feedback)
         exportLayers(iface, layers, folder, precision, optimize,
-                     popup, json, restrictToExtent, extent, feedback, matchCRS)
+                     popup, json, restrictToExtent, extent, feedback, matchCRS, pbfVectorTile)
         mapUnitsLayers = exportStyles(layers, folder, clustered, feedback)
         mapUnitLayers = getMapUnitLayers(mapUnitsLayers)
         osmb = writeLayersAndGroups(layers, groups, collapsedGroup, visible, interactive,
                                     folder, popup, settings, json, matchCRS,
                                     clustered, getFeatureInfo, baseMap, iface,
                                     restrictToExtent, extent, mapbounds,
-                                    mapSettings.destinationCrs().authid())
+                                    mapSettings.destinationCrs().authid(), pbfVectorTile)
         (jsAddress,
          cssAddress, controlCount) = writeHTMLstart(settings, controlCount,
                                                     osmb, feedback)
@@ -191,7 +196,7 @@ class OpenLayersWriter(Writer):
          layerSearch, controlCount) = writeLayerSearch(cssAddress, jsAddress,
                                                        controlCount,
                                                        layerSearch,
-                                                       searchLayer, feedback)
+                                                       searchLayer, pbfVectorTile, feedback)
         ol3layerswitcher = getLayerSwitcher()
         ol3popup = getPopup()
         ol3qgis2webjs = getJS(osmb)
@@ -412,7 +417,10 @@ def getCRSView(mapextent, fullextent, maxZoom, minZoom, matchCRS, mapSettings):
              6: 'degrees', 7: '', 8: 'cm', 9: 'mm', 10: '', 11: 'ft'}
     proj4 = ""
     proj = ""
-    view = "%s maxZoom: %d, minZoom: %d" % (mapextent, maxZoom, minZoom)
+    view = """constrainResolution: true,
+        maxZoom: %d,
+        minZoom: %d,
+        %s""" % (maxZoom, minZoom, mapextent)
     if matchCRS:
         proj4 = """
 <script src="resources/proj4.js">"""
@@ -421,12 +429,14 @@ def getCRSView(mapextent, fullextent, maxZoom, minZoom, matchCRS, mapSettings):
             epsg=mapSettings.destinationCrs().authid(),
             defn=mapSettings.destinationCrs().toProj4())
         unit = mapSettings.destinationCrs().mapUnits()
-        view += """, projection: new ol.proj.Projection({
+        view += """
+        projection: new ol.proj.Projection({
             code: '%s',
             //extent: %s,
-            units: '%s'})""" % (mapSettings.destinationCrs().authid(),
-                                fullextent,
-                                units.get(unit, 'm'))
+            units: '%s'
+        })""" % (mapSettings.destinationCrs().authid(), 
+                 fullextent, 
+                 units.get(unit, 'm'))
     return (proj, proj4, view)
 
 

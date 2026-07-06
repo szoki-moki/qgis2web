@@ -11,9 +11,6 @@ var map = new ol.Map({
 //initial view - epsg:3857 coordinates if not "Match project CRS"
 map.getView().fit(@BOUNDS@, map.getSize());
 
-//full zooms only
-map.getView().setProperties({constrainResolution: true});
-
 //change cursor
 function pointerOnFeature(evt) {
     if (evt.dragging) {
@@ -153,7 +150,10 @@ var doHover = @ONHOVER@;
 function createPopupField(currentFeature, currentFeatureKeys, layer) {
     var popupText = '';
     for (var i = 0; i < currentFeatureKeys.length; i++) {
-        if (currentFeatureKeys[i] != 'geometry' && currentFeatureKeys[i] != 'layerObject' && currentFeatureKeys[i] != 'idO') {
+        if (currentFeatureKeys[i] != 'geometry' &&
+            currentFeatureKeys[i] != 'layerObject' &&
+            currentFeatureKeys[i] != 'idO' &&
+            currentFeatureKeys[i] != '_mvtLayer_') {
             var popupField = '';
             if (layer.get('fieldLabels')[currentFeatureKeys[i]] == "hidden field") {
                 continue;

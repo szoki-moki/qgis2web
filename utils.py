@@ -15,6 +15,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+import json
 import os
 import time
 import re
@@ -22,7 +23,7 @@ import shutil
 import sys
 import string
 from io import StringIO
-from qgis.PyQt.QtCore import QDir, QVariant
+from qgis.PyQt.QtCore import QDate, QDateTime, QDir, QTime, QVariant
 from qgis.PyQt.QtGui import QPainter
 from qgis.core import (QgsApplication,
                        QgsProject,
@@ -220,29 +221,396 @@ def writeTmpLayer(layer, restrictToExtent, iface, extent):
 
 
 def exportLayers(iface, layers, folder, precision, optimize, popupField, json,
-                 restrictToExtent, extent, feedback, matchCRS):
+                 restrictToExtent, extent, feedback, matchCRS, pbfVectorTile):
     feedback.showFeedback('Exporting layers...')
     layersFolder = os.path.join(folder, "layers")
     QDir().mkpath(layersFolder)
+
+    pbf_vectortile_layers = [
+        # knowing that print pbfVectorTile looks like this
+        #[(False, None, None), (True, 0, 8)]
+        # I only take the layers that are True, and get their names from layers[i].name()
+        layers[i].name()
+        for i in range(len(layers))
+        if pbfVectorTile[i] and pbfVectorTile[i][0] == True
+    ]
+
     for count, (layer, encode2json, popup) in enumerate(zip(layers, json,
                                                             popupField)):
         sln = safeName(layer.name()) + "_" + str(count)
+        pbf_config = pbfVectorTile[count] if count < len(pbfVectorTile) else (False, None, None)
+        pbf_enabled, pbf_min_zoom, pbf_max_zoom = pbf_config
         vts = layer.customProperty("VectorTilesReader/vector_tile_source")
         if (layer.type() == layer.VectorLayer and vts is None and
                 (layer.providerType() != "WFS" or encode2json)):
-            feedback.showFeedback('Exporting %s to JSON...' % layer.name())
-            crs = QgsCoordinateReferenceSystem("EPSG:4326")
-            exportVector(layer, sln, layersFolder, restrictToExtent,
-                         iface, extent, precision, crs, optimize)
-            feedback.completeStep()
+            if pbf_enabled:
+                pbf_min = 3 if pbf_min_zoom is None else pbf_min_zoom
+                pbf_max = 4 if pbf_max_zoom is None else pbf_max_zoom
+                
+                feedback.showFeedback('Exporting %s to PBF XYZ EPSG:3857 [z%d - z%d]...' % (layer.name(), int(pbf_min), int(pbf_max)))  
+                feedback.showFeedback('<span style="color: gray">(attributes json required for layer search)</span>')
+                feedback.showFeedback('<span style="color: gray">(it may take a long time depending on the Zmin-Zmax chosen, the number of features and other settings)</span>')
+                
+                exportVectorTilesXYZ(layer, sln, layersFolder, restrictToExtent,
+                                     iface, extent, precision, pbf_min_zoom, pbf_max_zoom, pbf_vectortile_layers)
+            else:
+                feedback.showFeedback('Exporting %s to JSON...' % layer.name())
+                crs = QgsCoordinateReferenceSystem("EPSG:4326")
+                exportVector(layer, sln, layersFolder, restrictToExtent,
+                            iface, extent, precision, crs, optimize)
         elif (layer.type() == layer.RasterLayer and
                 layer.providerType() != "wms"):
             feedback.showFeedback('Exporting %s as raster...' % layer.name())
             exportRaster(layer, count, layersFolder, feedback, iface, matchCRS)
-            feedback.completeStep()
+        feedback.completeStep()
     feedback.completeStep()
 
+def exportVectorTilesXYZ(layer, sln, layersFolder, restrictToExtent, iface,
+                         extent, precision="maintain", min_zoom=None, max_zoom=None, pbf_vectortile_layers=None):
+    cleanLayer = writeTmpLayer(layer, restrictToExtent, iface, extent)
+    if cleanLayer is None:
+        QgsMessageLog.logMessage(
+            "writeTmpLayer returned None for {} - skipping PBF export".format(layer.name()),
+            "qgis2web",
+            level=Qgis.Warning)
+        return
 
+    target_crs = QgsCoordinateReferenceSystem("EPSG:3857")
+    if cleanLayer.crs().authid() != target_crs.authid():
+        try:
+            reprojected = processing.run("native:reprojectlayer", {
+                "INPUT": cleanLayer,
+                "TARGET_CRS": target_crs,
+                "OUTPUT": "memory:"
+            })
+            cleanLayer = reprojected["OUTPUT"]
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                "Could not reproject layer {} to EPSG:3857 before PBF export: {}".format(layer.name(), str(e)),
+                "qgis2web",
+                level=Qgis.Warning)
+
+    pbf_dir = os.path.join(layersFolder, sln + "-pbf")
+    if os.path.exists(pbf_dir):
+        shutil.rmtree(pbf_dir)
+    QDir().mkpath(pbf_dir)
+
+    # json_dir = os.path.join(layersFolder, sln + "-json")
+    # if os.path.exists(json_dir):
+    #     shutil.rmtree(json_dir)
+    # QDir().mkpath(json_dir)
+
+    min_z = 3 if min_zoom is None else int(min_zoom)
+    max_z = 4 if max_zoom is None else int(max_zoom)
+
+    # Always use the layer extent converted to EPSG:3857
+    layer_crs = cleanLayer.crs()
+    extent_param = None
+    try:
+        transform = QgsCoordinateTransform(layer_crs, target_crs,
+                                           QgsProject.instance())
+    except Exception:
+        transform = QgsCoordinateTransform(layer_crs, target_crs)
+    extent_param = transform.transformBoundingBox(cleanLayer.extent())
+
+    # # Add idO field with progressive numbering for each geometry
+    # try:
+    #     provider = cleanLayer.dataProvider()
+    #     idO_field = QgsField("idO", QVariant.Int)
+    #     provider.addAttributes([idO_field])
+    #     cleanLayer.updateFields()
+    #     idO_index = cleanLayer.fields().indexFromName("idO")
+    #     if idO_index >= 0:
+    #         feat_ids = {}
+    #         for i, feature in enumerate(cleanLayer.getFeatures(), start=1):
+    #             feat_ids[feature.id()] = {idO_index: i}
+    #         if feat_ids:
+    #             cleanLayer.startEditing()
+    #             provider.changeAttributeValues(feat_ids)
+    #             cleanLayer.commitChanges()
+    # except Exception as e:
+    #     QgsMessageLog.logMessage(
+    #         "Could not add idO field to {}: {}".format(layer.name(), str(e)),
+    #         "qgis2web",
+    #         level=Qgis.Warning)
+
+    # # Export individual JSON files ({sln}-{idO}.json) with WKB geometry (EPSG:3857) + properties
+    # # Geometry is base64-encoded WKB, ready for ol.format.WKB().readGeometry() in JS
+    # try:
+    #     import json
+    #     import base64
+
+    #     fields = cleanLayer.fields()
+    #     for feature in cleanLayer.getFeatures():
+    #         geom = feature.geometry()
+    #         if geom is None or geom.isNull():
+    #             continue
+    #         idO_val = feature.attribute("idO")
+    #         if idO_val is None:
+    #             continue
+    #         # WKB in EPSG:3857 (cleanLayer is already in 3857)
+    #         wkb = geom.asWkb()
+    #         if wkb is None or len(wkb) == 0:
+    #             continue
+    #         wkb_b64 = base64.b64encode(bytes(wkb)).decode('ascii')
+    #         # SAFE ATTRIBUTES (QVariant FIX)
+    #         props = {}
+    #         for field in fields:
+    #             val = safe_json_value(feature.attribute(field.name()))
+    #             if hasattr(val, "value"):
+    #                 try:
+    #                     val = val.value()
+    #                 except:
+    #                     val = str(val)
+    #             # "NULL" string → JSON null (field kept, value becomes null)
+    #             if isinstance(val, str) and val.strip().upper() == "NULL":
+    #                 val = None
+    #             props[field.name()] = val
+    #         feature_item = {
+    #             "geometry": wkb_b64,
+    #             "properties": props
+    #         }
+    #         filename = f"{sln}-{idO_val}.json"
+    #         filepath = os.path.join(json_dir, filename)
+    #         with open(filepath, "w", encoding="utf-8") as f:
+    #             json.dump(feature_item, f)
+    # except Exception as e:
+    #     QgsMessageLog.logMessage(
+    #         "Could not write individual geometry JSON for {}: {}".format(layer.name(), str(e)),
+    #         "qgis2web",
+    #         level=Qgis.Warning
+    #     )
+
+    # Export images BEFORE PBF (so it runs even if PBF succeeds and returns)
+    try:
+        images_folder = os.path.join(os.path.dirname(layersFolder), 'images')
+        for img_field in layer.fields():
+            exportImages(layer, img_field.name(), images_folder)
+    except Exception as e:
+        QgsMessageLog.logMessage(
+            "Could not export images for {}: {}".format(layer.name(), str(e)),
+            "qgis2web",
+            level=Qgis.Warning)
+
+    # # save attributes-only JSON for layer search
+    # try:
+    #     search_json_path = os.path.join(json_dir, f"{sln}-all.json")
+    #     exportJSONWithoutGeometry(cleanLayer, search_json_path)
+    # except Exception as e:
+    #     QgsMessageLog.logMessage(
+    #         "Could not export searchable JSON for {}: {}".format(layer.name(), str(e)),
+    #         "qgis2web",
+    #         level=Qgis.Warning
+    #     )
+    last_error = None
+
+    try:
+        layers_config = []
+
+        # ricevo layer sfoltito e semplificato in base alla geometria e alla zoom level
+        for z in range(min_z, max_z + 1):
+            zoomLayer = buildZoomLayer(cleanLayer, z)
+            zoomLayer.setName(sln)
+            layers_config.append({
+                "layer": zoomLayer,
+                "minZoom": z,
+                "maxZoom": z
+            })
+        params = {
+            "LAYERS": layers_config,
+            "MIN_ZOOM": min_z,
+            "MAX_ZOOM": max_z,
+            #"EXTENT": extent_param,
+            "XYZ_TEMPLATE": "{z}/{x}/{y}.pbf",
+            "OUTPUT_DIRECTORY": pbf_dir,
+        }
+        processing.run("native:writevectortiles_xyz", params)
+        QgsMessageLog.logMessage(
+            "PBF export OK for {} (native:writevectortiles_xyz)".format(layer.name()),
+            "qgis2web")
+        return
+    except Exception as e:
+        last_error = e
+        QgsMessageLog.logMessage(
+            "native:writevectortiles_xyz failed: {}".format(str(e)),
+            "qgis2web")
+
+    # --- All strategies failed ---
+    raise RuntimeError(
+        "PBF vector tile export failed for layer '{}'. All algorithms tried. "
+        "Last error: {}".format(layer.name(), str(last_error)))
+
+WORLD_SIZE = 40075016.68557849
+
+def createMemoryLayerLike(layer, name_suffix=""):
+    geom_type = QgsWkbTypes.displayString(layer.wkbType())
+    uri = geom_type
+    if layer.crs().isValid():
+        uri += "?crs=" + layer.crs().authid()
+    out = QgsVectorLayer(
+        uri,
+        layer.name() + name_suffix,
+        "memory"
+    )
+    provider = out.dataProvider()
+    provider.addAttributes(layer.fields())
+    out.updateFields()
+    return out
+
+def simplifyTolerance(z):
+    """
+    Tolleranza molto conservativa.
+    Molto meno aggressiva di Tippecanoe.
+    """
+    tile_size = WORLD_SIZE / (2 ** z)
+    return tile_size / 4096.0
+
+def representativePoint(geom):
+    if geom.isMultipart():
+        if QgsWkbTypes.geometryType(geom.wkbType()) == QgsWkbTypes.PointGeometry:
+            pts = geom.asMultiPoint()
+            if pts:
+                return pts[0]
+    else:
+        if QgsWkbTypes.geometryType(geom.wkbType()) == QgsWkbTypes.PointGeometry:
+            return geom.asPoint()
+    return None
+
+def thinPointLayer(layer, zoom):
+    tile_size = WORLD_SIZE / (2 ** zoom)
+    # extent = 4096
+    # GRID_SIZE = 32
+    #
+    # => 4096/32 = 128 celle
+    cell_size = tile_size / 128.0
+    occupied = set()
+    out = createMemoryLayerLike(
+        layer,
+        "_z{}".format(zoom)
+    )
+    provider = out.dataProvider()
+
+    feats_out = []
+    for feat in layer.getFeatures():
+        geom = feat.geometry()
+        if not geom or geom.isEmpty():
+            continue
+        p = representativePoint(geom)
+        if p is None:
+            continue
+        gx = int(p.x() / cell_size)
+        gy = int(p.y() / cell_size)
+        key = (gx, gy)
+        if key in occupied:
+            continue
+        occupied.add(key)
+        feats_out.append(QgsFeature(feat))
+    if feats_out:
+        provider.addFeatures(feats_out)
+    out.updateExtents()
+    QgsMessageLog.logMessage(
+        "Zoom {} -> {} point features".format(
+            zoom,
+            len(feats_out)
+        ),
+        "qgis2web"
+    )
+    return out
+
+def simplifyLayer(layer, zoom):
+    tol = simplifyTolerance(zoom)
+    out = createMemoryLayerLike(
+        layer,
+        "_z{}".format(zoom)
+    )
+    provider = out.dataProvider()
+
+    feats_out = []
+    for feat in layer.getFeatures():
+        geom = feat.geometry()
+        if not geom or geom.isEmpty():
+            continue
+        try:
+            # Simplify geometry preserving topology, WITHOUT clipping to extent
+            simplified = QgsTopologyPreservingSimplifier(tol).simplify(geom)
+            if simplified and not simplified.isEmpty():
+                geom = simplified
+        except Exception:
+            pass
+        new_feat = QgsFeature(out.fields())
+        new_feat.setAttributes(feat.attributes())
+        new_feat.setGeometry(geom)
+        feats_out.append(new_feat)
+    if feats_out:
+        provider.addFeatures(feats_out)
+    out.updateExtents()
+    QgsMessageLog.logMessage(
+        "Zoom {} -> {} simplified features (tol={})".format(
+            zoom,
+            len(feats_out),
+            round(tol, 2)
+        ),
+        "qgis2web"
+    )
+    return out
+
+def buildZoomLayer(layer, zoom):
+    geom_type = QgsWkbTypes.geometryType(layer.wkbType())
+    if geom_type == QgsWkbTypes.PointGeometry:
+        return thinPointLayer(layer, zoom)
+    return simplifyLayer(layer, zoom)
+
+
+def safe_json_value(val):
+    if val is None:
+        return None
+    # Python native
+    if isinstance(val, (str, int, float, bool)):
+        return val
+    # QGIS/QVariant unwrap
+    try:
+        if hasattr(val, "value"):
+            val = val.value()
+    except:
+        return str(val)
+    # QGIS date/time
+    if isinstance(val, QDate):
+        return val.toString("yyyy-MM-dd")
+    if isinstance(val, QDateTime):
+        return val.toString("yyyy-MM-ddTHH:mm:ss")
+    if isinstance(val, QTime):
+        return val.toString("HH:mm:ss")
+    # fallback totale
+    return str(val)
+
+def exportJSONWithoutGeometry(layer, output_path):
+    features = []
+    for feature in layer.getFeatures():
+        props = {}
+        for field in layer.fields():
+            val = safe_json_value(feature.attribute(field.name()))
+            if hasattr(val, "value"):
+                try:
+                    val = val.value()
+                except:
+                    val = str(val)
+            # "NULL" string → JSON null (field kept, value becomes null)
+            if isinstance(val, str) and val.strip().upper() == "NULL":
+                val = None
+            props[field.name()] = val
+        features.append({
+            "type": "Feature",
+            "properties": props,
+            "geometry": None
+        })
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(geojson, f)
+
+        
 def exportVector(layer, sln, layersFolder, restrictToExtent, iface,
                  extent, precision, crs, minify):
     canvas = iface.mapCanvas()

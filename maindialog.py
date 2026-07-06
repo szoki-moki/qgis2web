@@ -20,6 +20,7 @@
 import os
 import re
 import sys
+import shutil
 from collections import defaultdict, OrderedDict
 import webbrowser
 import platform
@@ -172,12 +173,30 @@ class MainDialog(QDialog, FORM_CLASS):
         self.setAllLayersVisibleValue = "default"
         self.setAllLayersPopupsValue = "default"
         self.setAllLayersClusterValue = "default"
+        self.setAllLayersPbfVectorTileValue = "default"
+        self.setAllPbfVtMinZoom = ""
+        self.setAllPbfVtMaxZoom = ""
         self.setAllLayersGetFeatureInfo = "default"
         self.setAllLayersBaseMap = "default"
         self.setAllLayersEncodeValue = "default"
         self.setAllPopupFieldsComboValue = None
         self.setAllApplyButton.clicked.connect(self.setAllApplyClicked)
-        
+        self.setAllCombo.currentIndexChanged.connect(self.onSetAllComboChanged)
+
+        # Widgets for PBF VT min/max zoom in Set All row
+        self._setAllPbfMinEdit = QLineEdit()
+        self._setAllPbfMinEdit.setPlaceholderText("Zmin[3-8]")
+        self._setAllPbfMinEdit.setFixedWidth(65)
+        self._setAllPbfMinEdit.setMaxLength(2)
+        self._setAllPbfMinEdit.setStyleSheet("color: #888;")
+        self._setAllPbfMinEdit.setVisible(False)
+        self._setAllPbfMaxEdit = QLineEdit()
+        self._setAllPbfMaxEdit.setPlaceholderText("Zmax[8-16]")
+        self._setAllPbfMaxEdit.setFixedWidth(65)
+        self._setAllPbfMaxEdit.setMaxLength(2)
+        self._setAllPbfMaxEdit.setStyleSheet("color: #888;")
+        self._setAllPbfMaxEdit.setVisible(False)
+
         self.layer_search_combo = None
         self.layer_filter_select = None
         self.exporter_combo = None
@@ -278,6 +297,9 @@ class MainDialog(QDialog, FORM_CLASS):
         self.populateConfigParams(self)
         self.populate_layers_and_groups(self)
         self.populateSetAllCombo()
+        # Insert min/max zoom widgets into the Set All layout (right after the Apply button, index 3)
+        self.horizontalLayout_3.insertWidget(3, self._setAllPbfMinEdit)
+        self.horizontalLayout_3.insertWidget(4, self._setAllPbfMaxEdit)
         self.populateLayerSearch()
         self.populateAttrFilter()
 
@@ -414,7 +436,8 @@ class MainDialog(QDialog, FORM_CLASS):
         writer = self.getWriterFactory()()
         (writer.layers, writer.groups, writer.popup,
          writer.visible, writer.interactive, writer.json,
-         writer.cluster, writer.getFeatureInfo, writer.baseMap, writer.collapsedGroup) = self.getLayersAndGroups()
+         writer.cluster, writer.pbfVectorTile, writer.getFeatureInfo,
+         writer.baseMap, writer.collapsedGroup) = self.getLayersAndGroups()
         writer.params = self.getParameters()
         return writer
 
@@ -547,9 +570,100 @@ class MainDialog(QDialog, FORM_CLASS):
         result = self.exporter.postProcess(results, feedback=self.feedback)
         if result and (not os.environ.get('CI') and
                        not os.environ.get('TRAVIS')):
-            webbrowser.open_new_tab(self.exporter.destinationUrl())
+            # The export folder is the directory containing index.html
+            export_folder = os.path.dirname(results.index_file)
+            # Check if any layer has PBF vector tile enabled
+            has_pbf = any(pbf_enabled for pbf_enabled, _, _ in writer.pbfVectorTile)
+            # Always copy the appropriate README.txt alongside index.html
+            self.copyReadmeFile(export_folder, has_pbf)
+            if has_pbf:
+                # Copy server launcher scripts inside the export folder
+                self.copyServerLaunchers(export_folder)
+                # Launch the appropriate platform-specific script
+                self.launchMapWithServer(export_folder)
+            else:
+                webbrowser.open_new_tab(self.exporter.destinationUrl())
             
-    
+    def copyServerLaunchers(self, folder):
+        """Copy server launcher scripts to the export folder."""
+        src_dir = os.path.join(os.path.dirname(__file__), "templates", "server_launchers")
+        if not os.path.exists(src_dir):
+            return
+        for filename in os.listdir(src_dir):
+            src_file = os.path.join(src_dir, filename)
+            if os.path.isfile(src_file):
+                dst_file = os.path.join(folder, filename)
+                try:
+                    shutil.copy2(src_file, dst_file)
+                except Exception as e:
+                    QgsMessageLog.logMessage(
+                        "Could not copy '{}': {}".format(filename, str(e)),
+                        "qgis2web",
+                        level=Qgis.Warning)
+
+    def launchMapWithServer(self, folder):
+        """Launch the map using a local HTTP server (for CORS support with PBF tiles)."""
+        import platform
+        import subprocess
+
+        system = platform.system()
+
+        if system == 'Windows':
+            launcher = 'show_map_with_server-win.bat'
+        elif system == 'Linux':
+            launcher = 'show_map_with_server-linux.sh'
+        elif system == 'Darwin':  # macOS
+            launcher = 'show_map_with_server-mac.command'
+        else:
+            QgsMessageLog.logMessage(
+                "Unknown OS '{}', cannot launch server. Open index.html manually.".format(system),
+                "qgis2web",
+                level=Qgis.Warning)
+            return
+
+        launcher_path = os.path.join(folder, launcher)
+        if not os.path.exists(launcher_path):
+            QgsMessageLog.logMessage(
+                "Launcher '{}' not found in export folder.".format(launcher_path),
+                "qgis2web",
+                level=Qgis.Warning)
+            return
+
+        try:
+            if system == 'Windows':
+                subprocess.Popen([launcher_path], cwd=folder)
+            else:
+                # Make executable and launch
+                subprocess.Popen(['chmod', '+x', launcher_path], cwd=folder)
+                if system == 'Darwin':
+                    subprocess.Popen(['open', launcher_path], cwd=folder)
+                else:
+                    subprocess.Popen(['x-terminal-emulator', '-e', launcher_path], cwd=folder)
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                "Failed to launch server: {}".format(str(e)),
+                "qgis2web",
+                level=Qgis.Warning)
+
+    def copyReadmeFile(self, folder, has_pbf):
+        """Copy the appropriate README.txt file to the export folder.
+
+        If any layer has PBF vector tile enabled, copy README_webserver.txt
+        (renamed to README.txt). Otherwise, copy README_standalone.txt.
+        """
+        templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+        if has_pbf:
+            src = os.path.join(templates_dir, "README_webserver.txt")
+        else:
+            src = os.path.join(templates_dir, "README_standalone.txt")
+        dst = os.path.join(folder, "README.txt")
+        try:
+            shutil.copy2(src, dst)
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                "Could not copy README.txt: {}".format(str(e)),
+                "qgis2web",
+                level=Qgis.Warning)
 
     def populate_layers_and_groups(self, dlg):
         """Populate layers on QGIS into our layers and group tree view."""
@@ -639,9 +753,10 @@ class MainDialog(QDialog, FORM_CLASS):
         self.setAllCombo.addItem("Layers to: Visible Checked/Unchecked")
         self.setAllCombo.addItem("Layers to: Popups Checked/Unchecked")
         self.setAllCombo.addItem("Layers to: Cluster Checked/Unchecked")
+        self.setAllCombo.addItem("Layers to: PBF Vector Tile Checked/Unchecked")
         self.setAllCombo.addItem("Layers to: Encode JSON Checked/Unchecked")
         self.setAllCombo.addItem("Layers to: GetFeatureInfo Checked/Unchecked")
-        self.setAllCombo.addItem("Layers to: BaseMap Checked/Unchecked")
+        self.setAllCombo.addItem("Layers to: BaseMap Checked/Unchecked")        
         self.setAllCombo.addItem("Popup fields to: no label")
         self.setAllCombo.addItem("Popup fields to: inline label - always visible")
         self.setAllCombo.addItem("Popup fields to: inline label - visible with data")
@@ -677,6 +792,16 @@ class MainDialog(QDialog, FORM_CLASS):
                     self.setAllLayersClusterValue = "checked"
                 else:
                     self.setAllLayersClusterValue = "unchecked"
+
+            if selected_value == "Layers to: PBF Vector Tile Checked/Unchecked":
+                if self.setAllLayersPbfVectorTileValue == "unchecked" or self.setAllLayersPbfVectorTileValue == "default":
+                    self.setAllLayersPbfVectorTileValue = "checked"
+                    self.setAllPbfVtMinZoom = self._setAllPbfMinEdit.text().strip()
+                    self.setAllPbfVtMaxZoom = self._setAllPbfMaxEdit.text().strip()
+                else:
+                    self.setAllLayersPbfVectorTileValue = "unchecked"
+                    self.setAllPbfVtMinZoom = ""
+                    self.setAllPbfVtMaxZoom = ""
                     
             if selected_value == "Layers to: Encode JSON Checked/Unchecked":
                 if self.setAllLayersEncodeValue == "unchecked" or self.setAllLayersEncodeValue == "default":
@@ -715,13 +840,23 @@ class MainDialog(QDialog, FORM_CLASS):
         except Exception as e:
             print("Error in layersSettingsApplyClicked:", str(e))
 
+    def onSetAllComboChanged(self, index):
+        selected = self.setAllCombo.currentText()
+        show_pbf = (selected == "Layers to: PBF Vector Tile Checked/Unchecked")
+        self._setAllPbfMinEdit.setVisible(show_pbf)
+        self._setAllPbfMaxEdit.setVisible(show_pbf)
+
     def populateLayerSearch(self):
         self.layer_search_combo.clear()
         self.layer_search_combo.addItem("None")
         (layers, groups, popup, visible, interactive,
-         json, cluster, getFeatureInfo, baseMap, collapsedGroup) = self.getLayersAndGroups()
+         json, cluster, pbfVectorTile, getFeatureInfo, baseMap, collapsedGroup) = self.getLayersAndGroups()
         for count, layer in enumerate(layers):
             if layer.type() == layer.VectorLayer:
+                # Skip PBF layers (not compatible with L.Control.Search)
+                pbf_config = pbfVectorTile[count] if count < len(pbfVectorTile) else (False, None, None)
+                if pbf_config[0]:
+                    continue
                 options = []
                 fields = layer.fields()
                 for f in fields:
@@ -741,10 +876,14 @@ class MainDialog(QDialog, FORM_CLASS):
     def populateAttrFilter(self):
         self.layer_filter_select.clear()
         (layers, groups, popup, visible, interactive,
-         json, cluster, getFeatureInfo, baseMap, collapsedGroup) = self.getLayersAndGroups()
+         json, cluster, pbfVectorTile, getFeatureInfo, baseMap, collapsedGroup) = self.getLayersAndGroups()
         options = []
         for count, layer in enumerate(layers):
             if layer.type() == layer.VectorLayer:
+                # Skip PBF layers (attribute filter not compatible)
+                pbf_config = pbfVectorTile[count] if count < len(pbfVectorTile) else (False, None, None)
+                if pbf_config[0]:
+                    continue
                 fields = layer.fields()
                 for f in fields:
                     fieldIndex = fields.indexFromName(f.name())
@@ -903,6 +1042,7 @@ class MainDialog(QDialog, FORM_CLASS):
         interactive = []
         json = []
         cluster = []
+        pbfVectorTile = []
         getFeatureInfo = []
         baseMap = []
         collapsedGroup = []
@@ -916,6 +1056,7 @@ class MainDialog(QDialog, FORM_CLASS):
                     interactive.append(item.interactive)
                     json.append(item.json)
                     cluster.append(item.cluster)
+                    pbfVectorTile.append(item.pbfVectorTile)
                     getFeatureInfo.append(item.getFeatureInfo)
                     baseMap.append(item.baseMap)
             else:
@@ -934,6 +1075,7 @@ class MainDialog(QDialog, FORM_CLASS):
                             interactive.append(allLayers.interactive)
                             json.append(allLayers.json)
                             cluster.append(allLayers.cluster)
+                            pbfVectorTile.append(allLayers.pbfVectorTile)
                             getFeatureInfo.append(allLayers.getFeatureInfo)
                             baseMap.append(allLayers.baseMap)
                 groups[group] = groupLayers[::-1]
@@ -946,16 +1088,17 @@ class MainDialog(QDialog, FORM_CLASS):
         interactive = interactive[::-1]
         json = json[::-1]
         cluster = cluster[::-1]
+        pbfVectorTile = pbfVectorTile[::-1]
         getFeatureInfo = getFeatureInfo[::-1]
         baseMap = baseMap[::-1]
         collapsedGroup = collapsedGroup
 
-        return (layers, groups, popup, visible, interactive, json, cluster, getFeatureInfo, baseMap, collapsedGroup)
+        return (layers, groups, popup, visible, interactive, json, cluster, pbfVectorTile, getFeatureInfo, baseMap, collapsedGroup)
 
     def reject(self):
         self.saveParameters()
         (layers, groups, popup, visible, interactive,
-         json, cluster, getFeatureInfo, baseMap, collapsedGroup) = self.getLayersAndGroups()
+         json, cluster, pbfVectorTile, getFeatureInfo, baseMap, collapsedGroup) = self.getLayersAndGroups()
         try:
             for layer, pop, vis, int in zip(layers, popup, visible,
                                             interactive):
@@ -1123,6 +1266,60 @@ class TreeLayerItem(QTreeWidgetItem):
                 self.clusterItem.setText(0, "Cluster")
                 self.addChild(self.clusterItem)
                 tree.setItemWidget(self.clusterItem, 1, self.clusterCheck)
+
+            # PBF Vector Tile
+            self.pbfVectorTileItem = QTreeWidgetItem(self)
+            self.pbfVectorTileCheck = QCheckBox()
+            if layer.customProperty("qgis2web/PBF Vector Tile") == 2:
+                self.pbfVectorTileCheck.setChecked(True)
+            self.pbfVectorTileCheck.stateChanged.connect(self.changePbfVectorTile)
+            self.pbfVectorTileCheck.stateChanged.connect(dlg.populateLayerSearch)
+            self.pbfVectorTileCheck.stateChanged.connect(dlg.populateAttrFilter)
+            if dlg.setAllLayersPbfVectorTileValue == "checked":
+                self.pbfVectorTileCheck.setChecked(True)
+            if dlg.setAllLayersPbfVectorTileValue == "unchecked":
+                self.pbfVectorTileCheck.setChecked(False)
+            if dlg.setAllLayersClusterValue == "checked":
+                self.pbfVectorTileCheck.setChecked(False)
+            self.pbfVectorTileItem.setText(0, "PBF Vector Tile (heavy layer)")
+            pbfVtContainer = QWidget()
+            pbfVtLayout = QHBoxLayout(pbfVtContainer)
+            pbfVtLayout.setContentsMargins(0, 0, 0, 0)
+            pbfVtLayout.setSpacing(4)
+            pbfVtLayout.addWidget(self.pbfVectorTileCheck)
+            self.pbfVtMinEdit = QLineEdit()
+            self.pbfVtMinEdit.setPlaceholderText("Zmin[3-8]")
+            self.pbfVtMinEdit.setFixedWidth(65)
+            self.pbfVtMinEdit.setFixedHeight(16)
+            self.pbfVtMinEdit.setMaxLength(2)
+            self.pbfVtMinEdit.setStyleSheet("color: #888;")
+            saved_pbf_min = layer.customProperty("qgis2web/PBF VT Min Zoom", "")
+            if saved_pbf_min:
+                self.pbfVtMinEdit.setText(str(saved_pbf_min))
+            if dlg.setAllPbfVtMinZoom:
+                self.pbfVtMinEdit.setText(dlg.setAllPbfVtMinZoom)
+            self.pbfVtMinEdit.editingFinished.connect(
+                lambda: layer.setCustomProperty("qgis2web/PBF VT Min Zoom", self.pbfVtMinEdit.text()))
+            pbfVtLayout.addWidget(self.pbfVtMinEdit)
+            self.pbfVtMaxEdit = QLineEdit()
+            self.pbfVtMaxEdit.setPlaceholderText("Zmax[8-16]")
+            self.pbfVtMaxEdit.setFixedWidth(65)
+            self.pbfVtMaxEdit.setFixedHeight(16)
+            self.pbfVtMaxEdit.setMaxLength(2)
+            self.pbfVtMaxEdit.setStyleSheet("color: #888;")
+            saved_pbf_max = layer.customProperty("qgis2web/PBF VT Max Zoom", "")
+            if saved_pbf_max:
+                self.pbfVtMaxEdit.setText(str(saved_pbf_max))
+            if dlg.setAllPbfVtMaxZoom:
+                self.pbfVtMaxEdit.setText(dlg.setAllPbfVtMaxZoom)
+            self.pbfVtMaxEdit.editingFinished.connect(
+                lambda: layer.setCustomProperty("qgis2web/PBF VT Max Zoom", self.pbfVtMaxEdit.text()))
+            pbfVtLayout.addWidget(self.pbfVtMaxEdit)
+            pbfVtHintLabel = QLabel("(Disables Cluster)")
+            pbfVtLayout.addWidget(pbfVtHintLabel)
+            pbfVtLayout.addStretch()
+            self.addChild(self.pbfVectorTileItem)
+            tree.setItemWidget(self.pbfVectorTileItem, 1, pbfVtContainer)
         else:
             if layer.providerType() == 'wms':
                 # Check if the layer can identify
@@ -1268,6 +1465,18 @@ class TreeLayerItem(QTreeWidgetItem):
             return self.clusterCheck.isChecked()
         except Exception:
             return False
+        
+    @property
+    def pbfVectorTile(self):
+        try:
+            enabled = self.pbfVectorTileCheck.isChecked()
+            min_zoom = self.pbfVtMinEdit.text().strip()
+            max_zoom = self.pbfVtMaxEdit.text().strip()
+            min_zoom = int(min_zoom) if min_zoom != "" else None
+            max_zoom = int(max_zoom) if max_zoom != "" else None
+            return (enabled, min_zoom, max_zoom)
+        except Exception:
+            return (False, None, None)
 
     @property
     def getFeatureInfo(self):
@@ -1288,6 +1497,15 @@ class TreeLayerItem(QTreeWidgetItem):
 
     def changeCluster(self, isCluster):
         self.layer.setCustomProperty("qgis2web/Cluster", isCluster)
+
+    def changePbfVectorTile(self, isPbfVectorTile):
+        self.layer.setCustomProperty("qgis2web/PBF Vector Tile", isPbfVectorTile)
+        is_checked = (isPbfVectorTile == Qt.CheckState.Checked or isPbfVectorTile == 2)
+        # disattivo cluster
+        if is_checked:
+            # se cluster attivo, lo disattivo
+            if hasattr(self, "clusterCheck"):
+                self.clusterCheck.setChecked(False)
 
     def changeGetFeatureInfo(self, isGetFeatureInfo):
         self.layer.setCustomProperty("qgis2web/GetFeatureInfo",

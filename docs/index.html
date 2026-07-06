@@ -154,7 +154,7 @@
 
 			<h2 id="BestPractices">Best Practices</h2>
 
-				<p>QGIS Desktop and web mapping technologies such as Leaflet or OpenLayers are very different technologies. It is hardly possible to create a 1:1 copy of all desktop
+				<p>QGIS Desktop and web mapping technologies such as OpenLayers or Leaflet are very different technologies. It is hardly possible to create a 1:1 copy of all desktop
 				features for the web. Manual post-processing of the exported code may therefore	be necessary for complex requirements.</p>
 				<p><a href="#Projectsettings">Project settings</a> section of this wiki explains how to configure your QGIS project.</p>
 				<p><a href="#qgis2websettings">qgis2web settings</a> section of this wiki explains how to configure the plugin's settings for an optimal export.</p>
@@ -168,8 +168,11 @@
 				are typically drawn on top (Z-order). Use the <code>Permanent sort</code> (or <code>Sort</code>) tool in the Processing Toolbox.<br>
 				<b>Raster fallback for complex symbols:</b> If a style cannot be reproduced (e.g. very specific textures or artistic lines), export that layer from QGIS as a
 				raster image (GeoTIFF) and include it as a raster layer. This preserves the appearance completely.<br>
-				<b>Limit data volume:</b> Very large vector datasets are not suitable for static qgis2web exports. Look at techniques like heatmaps, point clustering or server 
-				side rendering (GIS servers) to cope with.
+				<b>Export large datasets as PBF Vector Tile:</b> Very large vector datasets are not suitable for classic GeoJSON export. You can now export them as
+				<code>PBF Vector Tile (heavy layer)</code> (MVT format). For each layer, set <code>Zmin</code> (minimum zoom level — typically 3–8) and
+				<code>Zmax</code> (maximum zoom level — typically 8–16) to control the tile pyramid size. Higher ranges produce more tiles and may significantly
+				increase export time and storage but the resulting web map will load instantly at startup since only the tiles needed for the current view are fetched on the fly. <br>
+				<b>Note:</b> when PBF Vector Tile is enabled, <code>Layer Search</code> and <code>Attribute Filter</code> are automatically disabled for that layer.
 			
 		<div class="line"></div>
 
@@ -411,6 +414,18 @@
 				<h3>Visible</h3>
 				<p>Select whether the layer will be visible on map load. This only determines visibility - the layer will be loaded regardless of this setting:</p>
 				<img src="visible.png" alt="Set layer title">
+
+				<h3>PBF Vector Tile (heavy layer)</h3>
+				<p>Export the layer as Mapbox Vector Tiles (MVT / .pbf) instead of GeoJSON. This option is designed for large datasets that would be too slow
+				or too large as GeoJSON.</p>
+				<ul>
+					<li><code>Zmin</code> — minimum zoom level at which tiles are generated (e.g. 3). Lower values = more tiles.</li>
+					<li><code>Zmax</code> — maximum zoom level (e.g. 8–16). Higher values = more tiles and longer export time.</li>
+					<li>Disables <code>Cluster</code> (incompatible), <code>Layer Search</code> and <code>Attribute Filter</code>.</li>
+					<li>Labels and Popups are supported via a companion GeoJSON overlay on top of the vector tile layer.</li>
+					<li>The exported map requires a local HTTP server to serve the .pbf tiles (a launcher script is provided).</li>
+				</ul>
+				<img src="pbf-vectortile-option.png" alt="PBF Vector Tile Option">
 				
 				<h3>Popups</h3>
 				<p>Select whether a layer should show a popup and respond or whether the layer should not listen to click events.</p>

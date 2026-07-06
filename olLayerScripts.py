@@ -1,6 +1,7 @@
 import re
 import os
 import codecs
+import datetime
 from urllib.parse import parse_qs
 
 from qgis.PyQt.QtCore import QCoreApplication
@@ -15,6 +16,7 @@ from qgis.core import (QgsProject,
                        QgsCoordinateTransform,
                        QgsWkbTypes)
 from qgis2web.utils import safeName, is25d, BLEND_MODES
+from qgis2web.olStyleScripts import getValue
 
 try:
     from vector_tiles_reader.plugin.util.tile_json import TileJSON
@@ -39,15 +41,15 @@ class LegendItem:
     
 def writeLayersAndGroups(layers, groups, collapsedGroup, visible, interactive, folder, popup,
                          settings, json, matchCRS, clustered, getFeatureInfo, baseMap,
-                         iface, restrictToExtent, extent, bounds, authid):
+                         iface, restrictToExtent, extent, bounds, authid, pbfVectorTile):
 
     canvas = iface.mapCanvas()
     layerVars = ""
     layer_names_id = {}
     vtLayers = []
     for count, (layer, encode2json,
-                cluster, info, baseMap) in enumerate(zip(layers, json, clustered,
-                                                getFeatureInfo, baseMap)):
+                cluster, info, baseMap, pbfVectorTile) in enumerate(zip(layers, json, clustered,
+                                                getFeatureInfo, baseMap, pbfVectorTile)):
         layer_names_id[layer.id()] = str(count)
         if is25d(layer, canvas, restrictToExtent, extent):
             pass
@@ -56,7 +58,7 @@ def writeLayersAndGroups(layers, groups, collapsedGroup, visible, interactive, f
              vtLayers) = layerToJavascript(iface, layer, encode2json, matchCRS,
                                            interactive[count], cluster, info,
                                            restrictToExtent, extent, count,
-                                           vtLayers)
+                                           vtLayers, pbfVectorTile)
             layerVars += "\n" + "\n".join([layerVar])
     (groupVars, groupedLayers) = buildGroups(groups, collapsedGroup, qms, layer_names_id)
     (mapLayers, layerObjs, osmb) = layersAnd25d(layers, canvas,
@@ -108,7 +110,10 @@ def writeLayersAndGroups(layers, groups, collapsedGroup, visible, interactive, f
 
 def layerToJavascript(iface, layer, encode2json, matchCRS, interactive,
                       cluster, info, restrictToExtent, extent, count,
-                      vtLayers):
+                      vtLayers, pbfVectorTile):
+    
+    pbf_enabled, pbf_min_zoom, pbf_max_zoom = pbfVectorTile
+
     (minResolution, maxResolution) = getScaleRes(layer)
     layerName = safeName(layer.name()) + "_" + str(count)
     rawName = layer.name()
@@ -133,11 +138,24 @@ def layerToJavascript(iface, layer, encode2json, matchCRS, interactive,
         if isinstance(renderer, QgsHeatmapRenderer):
             (layerType, hmRadius,
              hmRamp, hmWeight, hmWeightMax) = getHeatmap(layer, renderer)
+        elif pbf_enabled:
+            layerType = "PBFVectorTile"
         else:
             layerType = "Vector"
         crsConvert = getCRS(iface, matchCRS)
+        if matchCRS:
+            mapCRS = iface.mapCanvas().mapSettings().destinationCrs().authid()
+        else:
+            mapCRS = "EPSG:3857"
 
-        return getJSON_and_WFS(layerName, crsConvert, layerAttr, interactive,
+        if layerType == "PBFVectorTile":
+            return getPBFXYZ(layerName, mapCRS, layerAttr, interactive,
+                             cluster, layerType, minResolution,
+                             maxResolution, hmRadius, hmRamp, hmWeight,
+                             hmWeightMax, renderer, layer, encode2json,
+                             pbf_min_zoom, pbf_max_zoom), vtLayers
+        else:
+            return getJSON_and_WFS(layerName, crsConvert, layerAttr, interactive,
                            cluster, layerType, minResolution,
                            maxResolution, hmRadius, hmRamp, hmWeight,
                            hmWeightMax, renderer, layer, encode2json), vtLayers
@@ -349,6 +367,98 @@ def getPopups(layer, labels, sln, fieldLabels, fieldAliases, fieldImages):
     evt.context.globalCompositeOperation = '%(blend)s';
 });""" % ({"name": sln, "blend": BLEND_MODES[layer.blendMode()]})
     return (fieldLabels, fieldAliases, fieldImages, blend_mode)
+
+
+def getPBFXYZ(layerName, mapCRS, layerAttr, interactive, cluster, 
+              layerType, minResolution, maxResolution, hmRadius, hmRamp,
+              hmWeight, hmWeightMax, renderer, layer, encode2json,
+              pbf_min_zoom, pbf_max_zoom):
+
+    current_date = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+    layerExtent = layer.extent()
+    layerCRS = layer.crs().authid()
+    if layerCRS != 'EPSG:3857':
+        crsSrc = QgsCoordinateReferenceSystem(layerCRS)
+        crsDest = QgsCoordinateReferenceSystem('EPSG:3857')
+        xform = QgsCoordinateTransform(crsSrc, crsDest, QgsProject.instance())
+        transformedExtent = xform.transformBoundingBox(layerExtent)
+        xmin = transformedExtent.xMinimum()
+        ymin = transformedExtent.yMinimum()
+        xmax = transformedExtent.xMaximum()
+        ymax = transformedExtent.yMaximum()
+    else:
+        xmin = layerExtent.xMinimum()
+        ymin = layerExtent.yMinimum()
+        xmax = layerExtent.xMaximum()
+        ymax = layerExtent.yMaximum()
+
+    min_z = 3 if pbf_min_zoom is None else int(pbf_min_zoom)
+    max_z = 4 if pbf_max_zoom is None else int(pbf_max_zoom)
+
+    layerCode = """
+var vectorTileUrl_%(n)s = 'layers/%(n)s-pbf/{z}/{x}/{y}.pbf';
+var vectorTileSource_%(n)s = new ol.source.VectorTile({""" % {"n": layerName}
+    layerCode += '''
+    format: new ol.format.MVT({
+            featureClass: ol.Feature,
+            layerName: '_mvtLayer_'
+        }),
+    tileSize: 256,
+    cacheSize: 512,
+    minZoom: %(minZ)d,
+    maxZoom: %(maxZ)d,
+    url: vectorTileUrl_%(n)s,
+    attributions: '%(layerAttr)s'
+});''' % {"n": layerName,
+          "minZ": min_z,
+          "maxZ": max_z,
+          "layerAttr": layerAttr}
+
+    layerCode += '''
+var lyr_%(n)s = new ol.layer.VectorTile({
+    declutter: false,
+    source: vectorTileSource_%(n)s,
+    sourceType: 'pbf',
+    popuplayertitle: '%(name)s',
+    extent: ol.proj.transformExtent([%(xmin)s, %(ymin)s, %(xmax)s, %(ymax)s], 'EPSG:3857', '%(mapCRS)s'),
+    interactive: %(int)s,
+    style: style_%(n)s,''' % {"n": layerName,
+                              "name": layer.name().replace("'", "\\'"),
+                              "int": str(interactive).lower(),
+                              "xmin": xmin,
+                              "ymin": ymin,
+                              "xmax": xmax,
+                              "ymax": ymax,
+                              "mapCRS": mapCRS}
+
+    if isinstance(renderer, QgsSingleSymbolRenderer):
+        layerCode += '''
+    title: '<img src="styles/legend/%(icon)s.png" /> %(name)s'
+});''' % {"icon": layerName,
+            "name": layer.name().replace("'", "\\'")}              
+    elif isinstance(renderer, QgsCategorizedSymbolRenderer):
+        layerCode += getLegend(renderer.categories(), layer, layerName)
+        layerCode += '''});'''
+    elif isinstance(renderer, QgsGraduatedSymbolRenderer):
+        layerCode += getLegend(renderer.ranges(), layer, layerName)
+        layerCode += '''});'''
+    elif isinstance(renderer, QgsRuleBasedRenderer):
+        rules = renderer.rootRule().children()
+        subitems = []
+        for rule in rules:
+            if rule.symbol() is not None:
+                subitems.append(LegendItem(rule.label(), rule.symbol().color()))
+        layerCode += getLegend(subitems, layer, layerName)
+        layerCode += '''});'''
+    else:
+        layerCode += '''
+    title: '%(name)s'
+});''' % {"name": layer.name().replace("'", "\\'")}
+
+    layerCode += '''\n'''
+
+    return layerCode
 
 
 def getJSON_and_WFS(layerName, crsConvert, layerAttr, interactive, cluster,
@@ -705,10 +815,10 @@ def getRaster(iface, layer, layerName, layerAttr, minResolution, maxResolution,
     # Get legend symbology items
     legendSymbologyItems = layer.legendSymbologyItems()
 
-    # Convert legendSymbologyItems to a format compatible with getAttributionLegend and getTitleLegend
+    # Convert legendSymbologyItems to a format compatible with getAttribution and getTitleLegend
     subitems = [LegendItem(item[0], item[1]) for item in legendSymbologyItems]
 
-    # Use getAttributionLegend and getTitleLegend to compose attribution and title
+    # Use getAttribution and getTitleLegend to compose attribution and title
     title = getLegend(subitems, layer, layerName)
 
     return '''var lyr_%(n)s = new ol.layer.Image({

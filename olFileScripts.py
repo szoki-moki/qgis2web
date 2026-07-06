@@ -43,9 +43,9 @@ def writeHTMLstart(settings, controlCount, osmb, feedback):
 
 
 def writeLayerSearch(cssAddress, jsAddress, controlCount, layerSearch,
-                     searchLayer, feedback):
+                     searchLayer, pbfVectorTile, feedback):
     feedback.showFeedback("Writing Layer Search...")
-    if layerSearch != "None" and layerSearch != "":
+    if layerSearch != "None" and layerSearch != "" and not pbfVectorTile:
         cssAddress += """
         <link rel="stylesheet" type="text/css" href="resources/horsey.min.css">
         <link rel="stylesheet" type="text/css" """

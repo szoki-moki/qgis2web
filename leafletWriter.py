@@ -30,7 +30,7 @@ from qgis.core import (Qgis,
                        QgsWkbTypes,
                        QgsMessageLog)
 import traceback
-from qgis.PyQt.QtCore import Qt, QObject
+from qgis.PyQt.QtCore import Qt, QDir, QObject
 from qgis.PyQt.QtGui import QCursor
 from qgis.PyQt.QtWidgets import QApplication
 import os
@@ -39,7 +39,8 @@ import re
 from qgis2web.leafletFileScripts import (writeFoldersAndFiles,
                                          writeCSS,
                                          writeHTMLstart)
-from qgis2web.leafletLayerScripts import (writeVectorLayer, getLabels)
+from qgis2web.leafletLayerScripts import (writeVectorLayer, getLabels,
+                                         getPBFLabels)
 from qgis2web.leafletScriptStrings import (jsonScript,
                                            scaleDependentLabelScript,
                                            mapScript,
@@ -62,7 +63,7 @@ from qgis2web.leafletScriptStrings import (jsonScript,
                                            addLocateControl,
                                            addMeasureControl,
                                            addZoomControl)
-from qgis2web.utils import (ALL_ATTRIBUTES, exportVector,
+from qgis2web.utils import (ALL_ATTRIBUTES, exportVector, exportVectorTilesXYZ,
                             exportRaster, safeName, returnFilterValues)
 from qgis2web.writer import (Writer,
                              WriterResult,
@@ -102,6 +103,7 @@ class LeafletWriter(Writer):
             interactive=self.interactive,
             json=self.json,
             cluster=self.cluster,
+            pbfVectorTile=self.pbfVectorTile,
             getFeatureInfo=self.getFeatureInfo,
             baseMap = self.baseMap,
             params=self.params,
@@ -116,7 +118,7 @@ class LeafletWriter(Writer):
     @classmethod
     def writeLeaflet(
             cls, iface, feedback, folder,
-            layer_list, groups, collapsedGroup, visible, interactive, cluster,
+            layer_list, groups, collapsedGroup, visible, interactive, cluster, pbfVectorTile,
             json, getFeatureInfo, baseMap, params, popup):
         outputProjectFileName = folder
         QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
@@ -212,17 +214,27 @@ class LeafletWriter(Writer):
             rawLayerName = layer.name()
             safeLayerName = safeName(rawLayerName) + "_" + str(lyrCount)
             vts = layer.customProperty("VectorTilesReader/vector_tile_url")
+            pbf_config = pbfVectorTile[lyrCount] if lyrCount < len(pbfVectorTile) else (False, None, None)
+            pbf_enabled, pbf_min_zoom, pbf_max_zoom = pbf_config
             if layer.providerType() != 'WFS' or jsonEncode is True:
                 if layer.type() == QgsMapLayer.VectorLayer and vts is None:
-                    feedback.showFeedback('Exporting %s to JSON...' %
-                                          layer.name())
-                    exportVector(layer, safeLayerName, dataStore,
-                                 restrictToExtent, iface, extent, precision,
-                                 exp_crs, minify)
-                    jsons += jsonScript(safeLayerName)
-                    scaleDependentLabels = \
-                        scaleDependentLabelScript(layer, safeLayerName)
-                    labelVisibility += scaleDependentLabels
+                    if pbf_enabled:
+                        feedback.showFeedback('Exporting %s to PBF XYZ EPSG:3857 [z%d - z%d]...' % (layer.name(), int(pbf_min_zoom or 3), int(pbf_max_zoom or 4)))
+                        feedback.showFeedback('<span style="color: gray">(it may take a long time depending on the Zmin-Zmax chosen, the number of features and other settings)</span>')
+                        layersFolder = os.path.join(outputProjectFileName, "data")
+                        QDir().mkpath(layersFolder)
+                        exportVectorTilesXYZ(layer, safeLayerName, layersFolder,
+                                             restrictToExtent, iface, extent, precision,
+                                             pbf_min_zoom, pbf_max_zoom)
+                    else:
+                        feedback.showFeedback('Exporting %s to JSON...' % layer.name())
+                        exportVector(layer, safeLayerName, dataStore,
+                                     restrictToExtent, iface, extent, precision,
+                                     exp_crs, minify)
+                        jsons += jsonScript(safeLayerName)
+                        scaleDependentLabels = \
+                            scaleDependentLabelScript(layer, safeLayerName)
+                        labelVisibility += scaleDependentLabels
                     feedback.completeStep()
 
                 elif layer.type() == QgsMapLayer.RasterLayer:
@@ -309,7 +321,8 @@ class LeafletWriter(Writer):
                                              restrictToExtent, extent,
                                              feedback, labelCode, vtLabels,
                                              vtStyles, useMultiStyle, useHeat,
-                                             useVT, useShapes, useOSMB)
+                                             useVT, useShapes, useOSMB,
+                                             pbfVectorTile=pbfVectorTile[count] if count < len(pbfVectorTile) else (False, None, None))
                 if useMapUnits:
                     mapUnitLayers.append(safeLayerName)
             elif layer.type() == QgsMapLayer.RasterLayer:
@@ -382,23 +395,49 @@ class LeafletWriter(Writer):
             pass
         searchLayer = "%s_%s" % (layerType,
                                  params["Appearance"]["Search layer"])
+        # Exclude PBF layers from search and filter at export time
+        pbf_search_layer_names = set()
+        for count, layer in enumerate(layer_list):
+            pbf_config = pbfVectorTile[count] if count < len(pbfVectorTile) else (False, None, None)
+            if pbf_config[0]:
+                sln = safeName(layer.name()) + "_" + str(count)
+                pbf_search_layer_names.add(sln)
+        # Reset searchLayer if it references a PBF layer
+        search_suffix = params["Appearance"]["Search layer"]
+        if search_suffix and search_suffix in pbf_search_layer_names:
+            searchLayer = "None"
         filterItems = []
         for item in params["Appearance"]["Attribute filter"]:
             filterItem = returnFilterValues(layer_list,
                                             item.text().split(": ")[0],
                                             item.text().split(": ")[1])
             if filterItem:
-                filterItems.append(filterItem)
+                # Skip filter items that reference a PBF layer
+                filter_layer_name = None
+                for count, layer in enumerate(layer_list):
+                    sln = safeName(layer.name()) + "_" + str(count)
+                    if sln == filterItem.get("layerSln"):
+                        pbf_cfg = pbfVectorTile[count] if count < len(pbfVectorTile) else (False, None, None)
+                        if pbf_cfg[0]:
+                            filter_layer_name = sln
+                        break
+                if filter_layer_name is None:
+                    filterItems.append(filterItem)
         labelList = []
         for count, layer in enumerate(layer_list):
             vts = layer.customProperty("VectorTilesReader/vector_tile_url")
+            pbf_config = pbfVectorTile[count] if count < len(pbfVectorTile) else (False, None, None)
+            pbf_enabled, _, _ = pbf_config
             safeLayerName = safeName(layer.name()) + "_" + str(count)
             if (layer.type() == QgsMapLayer.VectorLayer and vts is None):
                 labelling = layer.labeling()
                 if labelling is not None:
                     palyr = labelling.settings()
                     if palyr.fieldName and palyr.fieldName != "":
-                        labelList.append("layer_%s" % safeLayerName)
+                        if pbf_enabled:
+                            labelList.append("label_layer_%s" % safeLayerName)
+                        else:
+                            labelList.append("layer_%s" % safeLayerName)
         labelsList = ",".join(labelList)
         end += endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode,
                              labelVisibility, searchLayer, useHeat,
