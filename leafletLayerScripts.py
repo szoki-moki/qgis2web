@@ -553,7 +553,7 @@ def getPopups(layer, safeLayerName, highlight, popupsOnHover, popup, vts,
             if editorWidget == 'ExternalResource':
                 row += "'<img src=\"images/' + "
                 row += "String(feature.properties['" + str(field) + "']"
-                row += ").replace(/[\\\/:]/g, '_').trim()"
+                row += ").replace(/[\\\\/:]/g, '_').trim()"
                 row += ".replace(/'/g, '\\\'')"
                 row += ".replace(/\"/g, '&quot;')"
                 row += " + '\">' : '') + '"
@@ -643,7 +643,7 @@ def getPBFPopups(layer, safeLayerName, highlight, popupsOnHover, popup,
             if editorWidget == 'ExternalResource':
                 row += "'<img src=\"images/' + "
                 row += "String(properties['" + str(field) + "']"
-                row += ").replace(/[\\\/:]/g, '_').trim()"
+                row += ").replace(/[\\\\/:]/g, '_').trim()"
                 row += ".replace(/'/g, '\\\'')"
                 row += ".replace(/\"/g, '&quot;')"
                 row += " + '\">' : '') + '"

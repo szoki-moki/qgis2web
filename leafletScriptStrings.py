@@ -158,7 +158,7 @@ def mapScript(extent, matchCRS, crsAuthId, maxZoom, minZoom, bounds):
             var imgTd = tempDiv.querySelector('td img');
             if (imgTd) {
                 var src = imgTd.getAttribute('src');
-                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                if (/\\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
                     popup._contentNode.classList.add('media');
                     var img = popup._contentNode.querySelector('td img');
                     if (img) {
@@ -174,7 +174,7 @@ def mapScript(extent, matchCRS, crsAuthId, maxZoom, minZoom, bounds):
                             });
                         }
                     }
-                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                } else if (/\\.(mp3|wav|ogg|aac)$/i.test(src)) {
                     var audio = document.createElement('audio');
                     audio.controls = true;
                     audio.src = src;
@@ -184,7 +184,7 @@ def mapScript(extent, matchCRS, crsAuthId, maxZoom, minZoom, bounds):
                         popup.setContent(tempDiv.innerHTML);
                         popup.update();
                     }, 10);
-                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                } else if (/\\.(mp4|webm|ogg|mov)$/i.test(src)) {
                     var video = document.createElement('video');
                     video.controls = true;
                     video.src = src;
@@ -987,7 +987,7 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                   || Filters[key] == "time"){
                   try{
                     if (key in features[0].properties){
-                      HTMLkey = key.replace(/[&\/\\#,+()$~%.'":*?<>{} ]/g, '');
+                      HTMLkey = key.replace(/[&\\/\\#,+()$~%.'":*?<>{} ]/g, '');
                       startdate = document.getElementById("dat_" +
                         HTMLkey + "_date1").value.replace(" ", "T");
                       enddate = document.getElementById("dat_" +
