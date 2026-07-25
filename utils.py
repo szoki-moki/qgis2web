@@ -189,7 +189,8 @@ def writeTmpLayer(layer, restrictToExtent, iface, extent):
             fieldLength = max(fieldLength, 20)
         else:
             fieldType = "string"
-            fieldLength = max(fieldLength, 255)
+            if fieldLength > 0:
+                fieldLength = max(fieldLength, 255)
         uri += '&field=' + fieldName + ":" + fieldType + "(%d)" % fieldLength
     newlayer = QgsVectorLayer(uri, layer.name(), 'memory')
     writer = newlayer.dataProvider()
