@@ -314,16 +314,48 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
 			height: 100%;
 			overflow: auto;
 		}
-        .info {
-            padding: 6px 8px;
-            font: 14px/16px Arial, Helvetica, sans-serif;
+        .leaflet-control.info {
+            position: relative;
+            box-sizing: border-box;
+            min-width: 220px;
+            max-width: min(420px, calc(100vw - 40px));
+            padding: 16px 20px 20px 20px;
+            overflow: hidden;
             background-color:""" + widgetBackground + """ !important;
+            background-image: linear-gradient(135deg,
+                rgba(31, 77, 58, 0.16), rgba(111, 136, 124, 0.03));
             color: """ + fontColor + """ !important;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            border-radius: 5px;
+            border: 1px solid rgba(31, 77, 58, 0.2);
+            border-top: 4px solid #2c6e4f;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(31, 77, 58, 0.22),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.75) !important;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
         }
-        .info h2 {
-            margin: 0 0 5px;
+        .leaflet-control.info::after {
+            position: absolute;
+            bottom: 11px;
+            left: 20px;
+            width: 52px;
+            height: 2px;
+            content: "";
+            background: linear-gradient(90deg, #2c6e4f, transparent);
+            border-radius: 2px;
+            box-shadow: 0 1px 3px rgba(31, 77, 58, 0.25);
+        }
+        .leaflet-control.info h2 {
+            margin: 0;
+            overflow-wrap: anywhere;
+            font-family: "Palatino Linotype", "Book Antiqua", Palatino,
+                         Georgia, serif;
+            font-size: clamp(22px, 2vw, 30px);
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: 0.025em;
+            color: """ + fontColor + """ !important;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9),
+                         0 3px 8px rgba(31, 77, 58, 0.18);
         }
         .leaflet-container {
             background: #fff;

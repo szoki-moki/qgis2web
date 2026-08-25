@@ -1022,6 +1022,7 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         endHTML += ",".join(filterList) + "};"
         endHTML += r"""
         function filterFunc() {
+          var filteredFeatureCount = 0;
           map.eachLayer(function(lyr){
           if ("options" in lyr && "dataVar" in lyr["options"]){
             features = this[lyr["options"]["dataVar"]].features.slice(0);
@@ -1105,11 +1106,18 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
               }
             } catch(err){
             }
+          filteredFeatureCount += features.length;
           this[lyr["options"]["layerName"]].clearLayers();
           this[lyr["options"]["layerName"]].addData(features);
           """ + labelCode + """
           }
           })
+          var filteredFeatureCountElement = document.getElementById(
+            "filtered-feature-count");
+          if (filteredFeatureCountElement) {
+            filteredFeatureCountElement.textContent =
+              "Leválogatott fák darabszáma: " + filteredFeatureCount;
+          }
         }"""
         for item in range(0, filterNum):
             itemName = filterItems[item]["name"]
@@ -1381,6 +1389,16 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             """.format(name=itemName, nameS=safeName(itemName), de=de, ds=ds,
                        d=d, t=t, Y2=Y2, M2=M2, D2=D2, hh2=hh2, mm2=mm2,
                        ss2=ss2)
+        endHTML += """
+        var filteredFeatureCountDiv = document.createElement('div');
+        filteredFeatureCountDiv.id = 'filtered-feature-count';
+        filteredFeatureCountDiv.className = 'filtercount';
+        filteredFeatureCountDiv.setAttribute('aria-live', 'polite');
+        filteredFeatureCountDiv.textContent =
+          'Leválogatott fák darabszáma: 0';
+        document.getElementById('menu').appendChild(filteredFeatureCountDiv);
+        filterFunc();
+        """
     if useHeat:
         endHTML += """
         function geoJson2heat(geojson, weight) {

@@ -99,6 +99,13 @@
 #menu > .filterlabel {
     margin-left: 10px;
 }
+.filtercount {
+  margin: 16px 10px 12px 10px;
+  padding: 10px 0 0 0;
+  font: bold 14px/1.4 "Helvetica Neue", Arial, Helvetica, sans-serif;
+  color: var(--qgis2web-text-dark-green);
+  border-top: 1px solid #ddd;
+}
 .slider {
   font: 12px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
   margin-top: 10px;
