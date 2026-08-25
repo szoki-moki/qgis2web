@@ -749,7 +749,7 @@ def geocodeScript(geocode):
   var containers = new Photon.Search({{
     resultsHandler: myHandler,
     onSelected: onSelected,
-    placeholder: "Search an address",
+    placeholder: "Keresés címre",
     formatResult: formatResult,
     //url: API_URL + "/search/?",
     url: url["{geocode}"],

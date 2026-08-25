@@ -350,6 +350,35 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             max-height: 60vh;
             max-width: 60vw;
         }
+        .leaflet-popup-content video.popup-media {
+            width: 400px;
+            max-height: 60vh;
+            max-width: 60vw;
+        }
+        .leaflet-popup-content audio.popup-media {
+            max-width: 60vw;
+        }
+        /* placeholder shown while a lazily loaded popup image is fetched */
+        .leaflet-popup-content img.lazy-pending {
+            display: block;
+            min-width: 120px;
+            min-height: 90px;
+            background-color: #e9e9e9;
+            background-image: linear-gradient(90deg, #e9e9e9 0%, #f5f5f5 50%,
+                                              #e9e9e9 100%);
+            background-size: 200% 100%;
+            animation: qgis2webLazyPulse 1.2s ease-in-out infinite;
+        }
+        .leaflet-popup-content img.lazy-error {
+            min-width: 0;
+            min-height: 0;
+            background: none;
+            animation: none;
+        }
+        @keyframes qgis2webLazyPulse {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
 
         .leaflet-tooltip {
             background: none;

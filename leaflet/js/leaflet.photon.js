@@ -54,15 +54,15 @@ L.PhotonBaseSearch = L.PhotonBase.extend({
 
     options: {
         url: 'https://api-adresse.data.gouv.fr/search/?',
-        placeholder: 'Search an address',
+        placeholder: 'Keresés címre',
         minChar: 3,
         limit: 5,
         submitDelay: 1000,
         includePosition: true,
         bbox: null,
-        noResultLabel: 'Pas de résultats',
-        feedbackEmail: 'photon@komoot.de',  // Set to null to remove feedback box
-        feedbackLabel: 'Feedback'
+        noResultLabel: 'Nincs találat!',
+        feedbackEmail: 'kambiumfa@gmail.com',  // Set to null to remove feedback box
+        feedbackLabel: 'Visszajelzés'
     },
 
     CACHE: '',

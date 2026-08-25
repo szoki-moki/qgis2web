@@ -19,6 +19,7 @@ from qgis.core import (QgsSingleSymbolRenderer,
 from qgis2web.leafletStyleScripts import getLayerStyle
 from qgis2web.leafletScriptStrings import (popupScript,
                                            popFuncsScript,
+                                           popupContentScript,
                                            pointToLayerFunction,
                                            wfsScript,
                                            clusterScript,
@@ -504,6 +505,7 @@ def getPopups(layer, safeLayerName, highlight, popupsOnHover, popup, vts,
     field_vals = popup.values()
 
     table = ""
+    row = ""
     for field in popup:
         tablestart = "'<table>\\"
         row = ""
@@ -551,7 +553,10 @@ def getPopups(layer, safeLayerName, highlight, popupsOnHover, popup, vts,
             row += "!== null ? "
 
             if editorWidget == 'ExternalResource':
-                row += "'<img src=\"images/' + "
+                # data-lazy-src (not src): the browser must not fetch the
+                # media while the popup DOM is being built, only once the
+                # popup is open and the element is in view.
+                row += "'<img data-lazy-src=\"images/' + "
                 row += "String(feature.properties['" + str(field) + "']"
                 row += ").replace(/[\\\\/:]/g, '_').trim()"
                 row += ".replace(/'/g, '\\\'')"
@@ -562,17 +567,20 @@ def getPopups(layer, safeLayerName, highlight, popupsOnHover, popup, vts,
                 row += "String(feature.properties['" + str(field) + "'])"
                 row += ".replace(/'/g, '\\\'')"
                 row += ".toLocaleString()) : '') + '"
-            
+
             row += """</td>\\
                     </tr>\\"""
         tableend = """
                 </table>'"""
         table = tablestart + row + tableend
-    if popup != 0 and table != "":
-        popFuncs = popFuncsScript(table)
+    if popup != 0 and table != "" and row != "":
+        popupContent = popupContentScript(safeLayerName, table)
+        popFuncs = popFuncsScript(safeLayerName)
     else:
+        popupContent = ""
         popFuncs = ""
-    new_pop = popupScript(safeLayerName, popFuncs, highlight, popupsOnHover)
+    new_pop = popupContent + popupScript(safeLayerName, popFuncs, highlight,
+                                         popupsOnHover)
     return new_pop, popFuncs
 
 
@@ -641,7 +649,8 @@ def getPBFPopups(layer, safeLayerName, highlight, popupsOnHover, popup,
             row += "!= null ? "  # != null catches both null and undefined
 
             if editorWidget == 'ExternalResource':
-                row += "'<img src=\"images/' + "
+                # see getPopups(): lazy attribute, resolved on popup open
+                row += "'<img data-lazy-src=\"images/' + "
                 row += "String(properties['" + str(field) + "']"
                 row += ").replace(/[\\\\/:]/g, '_').trim()"
                 row += ".replace(/'/g, '\\\'')"
@@ -672,14 +681,12 @@ def getPBFPopups(layer, safeLayerName, highlight, popupsOnHover, popup,
         layer_%(sln)s.on('click', function(e) {
             if (e.layer && e.layer.properties) {
                 var feature = { properties: e.layer.properties };
-                var content = removeEmptyRowsFromPopupContent(getPopupContent_%(sln)s(e.layer.properties), feature);
-                var popup = L.popup({ maxHeight: 400 })
+                var content = buildPopupNode(
+                    getPopupContent_%(sln)s(e.layer.properties), feature);
+                L.popup({ maxHeight: 400 })
                     .setLatLng(e.latlng)
                     .setContent(content)
                     .openOn(map);
-                setTimeout(function() {
-                    addClassToPopupIfMedia(content, popup);
-                }, 10);
             }
         });""" % {"sln": safeLayerName}
 

@@ -135,85 +135,168 @@ def mapScript(extent, matchCRS, crsAuthId, maxZoom, minZoom, bounds):
     map += """
         var autolinker = new Autolinker"""
     map += "({truncate: {length: 30, location: 'smart'}});"
-    map += """
-        // remove popup's row if "visible-with-data"
-        function removeEmptyRowsFromPopupContent(content, feature) {
-         var tempDiv = document.createElement('div');
-         tempDiv.innerHTML = content;
-         var rows = tempDiv.querySelectorAll('tr');
-         for (var i = 0; i < rows.length; i++) {
-             var td = rows[i].querySelector('td.visible-with-data');
-             var key = td ? td.id : '';
-             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
-                 rows[i].parentNode.removeChild(rows[i]);
-             }
-         }
-         return tempDiv.innerHTML;
-        }"""
-    map += """
-        // modify popup if contains media
-        function addClassToPopupIfMedia(content, popup) {
-            var tempDiv = document.createElement('div');
-            tempDiv.innerHTML = content;
-            var imgTd = tempDiv.querySelector('td img');
-            if (imgTd) {
-                var src = imgTd.getAttribute('src');
-                if (/\\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
-                    popup._contentNode.classList.add('media');
-                    var img = popup._contentNode.querySelector('td img');
-                    if (img) {
-                        // If already loaded (cache), update immediately
-                        if (img.complete && img.naturalHeight > 0) {
-                            popup.update();
-                        } else {
-                            img.addEventListener('load', function() {
-                                popup.update();
-                            });
-                            img.addEventListener('error', function() {
-                                popup.update();
-                            });
-                        }
-                    }
-                } else if (/\\.(mp3|wav|ogg|aac)$/i.test(src)) {
-                    var audio = document.createElement('audio');
-                    audio.controls = true;
-                    audio.src = src;
-                    imgTd.parentNode.replaceChild(audio, imgTd);
-                    popup._contentNode.classList.add('media');
-                    setTimeout(function() {
-                        popup.setContent(tempDiv.innerHTML);
-                        popup.update();
-                    }, 10);
-                } else if (/\\.(mp4|webm|ogg|mov)$/i.test(src)) {
-                    var video = document.createElement('video');
-                    video.controls = true;
-                    video.src = src;
-                    video.style.width = "400px";
-                    video.style.height = "300px";
-                    video.style.maxHeight = "60vh";
-                    video.style.maxWidth = "60vw";
-                    imgTd.parentNode.replaceChild(video, imgTd);
-                    popup._contentNode.classList.add('media');
-                    
-                    // Aggiorna il popup quando il video carica i metadati
-                    video.addEventListener('loadedmetadata', function() {
-                        popup.update();
-                    });
-                    
-                    setTimeout(function() {
-                        popup.setContent(tempDiv.innerHTML);
-                        popup.update();
-                    }, 10);
-                } else {
-                    popup._contentNode.classList.remove('media');
-                }
-            } else {
-                popup._contentNode.classList.remove('media');
-            }
-        }
-    """
+    map += lazyPopupRuntime()
 
     return map
+
+
+def lazyPopupRuntime():
+    """Client-side runtime that defers all popup work until a popup is opened.
+
+    Building popup HTML for every feature up-front (string building +
+    autolinker + an innerHTML parse per feature) is what makes layers with a
+    few thousand features unusable. Everything below is only executed for the
+    feature whose popup is actually opened, and media inside that popup is
+    only fetched once it scrolls into view.
+    """
+    runtime = """
+        // ---- lazy popup runtime -------------------------------------------
+        // Images/audio/video referenced by a popup are only requested once the
+        // popup is open and the element is (close to) visible.
+        var lazyMediaObserver = ('IntersectionObserver' in window) ?
+            new IntersectionObserver(function(entries, observer) {
+                for (var i = 0; i < entries.length; i++) {
+                    if (entries[i].isIntersecting) {
+                        observer.unobserve(entries[i].target);
+                        loadLazyMedia(entries[i].target);
+                    }
+                }
+            }, {rootMargin: '200px'}) : null;
+
+        // Several images finishing at once should cause one relayout, not one
+        // per image.
+        var pendingPopupUpdates = [];
+        function flushPopupUpdates() {
+            var popups = pendingPopupUpdates;
+            pendingPopupUpdates = [];
+            for (var i = 0; i < popups.length; i++) {
+                if (popups[i].isOpen()) {
+                    popups[i].update();
+                }
+            }
+        }
+
+        function schedulePopupUpdate(popup) {
+            if (!popup || !popup.isOpen || !popup.isOpen()) {
+                return;
+            }
+            if (pendingPopupUpdates.indexOf(popup) !== -1) {
+                return;
+            }
+            if (!pendingPopupUpdates.length) {
+                window.requestAnimationFrame(flushPopupUpdates);
+            }
+            pendingPopupUpdates.push(popup);
+        }
+
+        function onLazyMediaSettled(e) {
+            var el = e.currentTarget;
+            el.removeEventListener('load', onLazyMediaSettled);
+            el.removeEventListener('error', onLazyMediaSettled);
+            el.classList.remove('lazy-pending');
+            if (e.type === 'error') {
+                el.classList.add('lazy-error');
+            }
+            schedulePopupUpdate(el._lazyPopup);
+        }
+
+        function loadLazyMedia(el) {
+            var src = el.getAttribute('data-lazy-src');
+            if (!src) {
+                return;
+            }
+            el.removeAttribute('data-lazy-src');
+            el.addEventListener('load', onLazyMediaSettled);
+            el.addEventListener('error', onLazyMediaSettled);
+            el.src = src;
+        }
+
+        // Turn <img data-lazy-src> placeholders into the right media element.
+        // Nothing is fetched here - only the tag type is decided.
+        function prepareLazyMedia(container) {
+            var placeholders = container.querySelectorAll('img[data-lazy-src]');
+            for (var i = placeholders.length - 1; i >= 0; i--) {
+                var el = placeholders[i];
+                var src = el.getAttribute('data-lazy-src');
+                var media = null;
+                if (/\\.(mp3|wav|aac|m4a|flac)$/i.test(src)) {
+                    media = document.createElement('audio');
+                } else if (/\\.(mp4|webm|ogg|ogv|mov)$/i.test(src)) {
+                    media = document.createElement('video');
+                }
+                if (media) {
+                    media.controls = true;
+                    media.preload = 'none';
+                    media.src = src;
+                    media.className = 'popup-media';
+                    el.parentNode.replaceChild(media, el);
+                } else {
+                    el.className = (el.className ? el.className + ' ' : '') +
+                        'popup-media lazy-pending';
+                    el.setAttribute('loading', 'lazy');
+                    el.setAttribute('decoding', 'async');
+                }
+            }
+        }
+
+        // Build the popup DOM once, on demand. Returns a detached node, so no
+        // network request is triggered until the node is attached and seen.
+        function buildPopupNode(content, feature) {
+            var container = document.createElement('div');
+            container.innerHTML = content;
+            // remove popup's row if "visible-with-data" and there is no data
+            var rows = container.querySelectorAll('tr');
+            for (var i = 0; i < rows.length; i++) {
+                var td = rows[i].querySelector('td.visible-with-data');
+                var key = td ? td.id : '';
+                if (td && feature.properties[key] == null) {
+                    rows[i].parentNode.removeChild(rows[i]);
+                }
+            }
+            prepareLazyMedia(container);
+            return container;
+        }
+
+        // Returned to bindPopup(): Leaflet calls it the first time the popup
+        // is opened, and the built node is cached for subsequent openings.
+        function lazyPopupContent(feature, contentBuilder) {
+            var node = null;
+            return function() {
+                if (node === null) {
+                    node = buildPopupNode(contentBuilder(feature), feature);
+                }
+                return node;
+            };
+        }
+
+        // One global handler instead of a listener per feature.
+        map.on('popupopen', function(e) {
+            var node = e.popup._contentNode;
+            if (!node) {
+                return;
+            }
+            if (node.querySelector('.popup-media')) {
+                node.classList.add('media');
+            } else {
+                node.classList.remove('media');
+            }
+            var pending = node.querySelectorAll('img[data-lazy-src]');
+            for (var i = 0; i < pending.length; i++) {
+                pending[i]._lazyPopup = e.popup;
+                if (lazyMediaObserver) {
+                    lazyMediaObserver.observe(pending[i]);
+                } else {
+                    loadLazyMedia(pending[i]);
+                }
+            }
+        });
+
+        // Kept for backwards compatibility with hand-edited exports.
+        function removeEmptyRowsFromPopupContent(content, feature) {
+            return buildPopupNode(content, feature).innerHTML;
+        }
+    """
+    return runtime
 
 def addZoomControl():
     zoomControlScript = """
@@ -281,14 +364,23 @@ def extentScript(extent, restrictToExtent):
     return layerOrder
 
 
-def popFuncsScript(table):
+def popupContentScript(safeLayerName, table):
+    """Emit the per-layer popup HTML builder.
+
+    It is a plain function so it can stay uncalled until a popup is opened.
+    """
+    popupContent = """
+        function getPopupContent_{safeLayerName}(feature) {{
+            return {table};
+        }}""".format(safeLayerName=safeLayerName, table=table)
+    return popupContent
+
+
+def popFuncsScript(safeLayerName):
     popFuncs = """
-            var popupContent = %s;
-            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
-			layer.on('popupopen', function(e) {
-				addClassToPopupIfMedia(content, e.popup);
-			});
-			layer.bindPopup(content, { maxHeight: 400 });""" % table
+            layer.bindPopup(
+                lazyPopupContent(feature, getPopupContent_{safeLayerName}),
+                {{ maxHeight: 400 }});""".format(safeLayerName=safeLayerName)
     return popFuncs
 
 
@@ -320,7 +412,7 @@ def popupScript(safeLayerName, popFuncs, highlight, popupsOnHover):
                 },
                 mouseover: highlightFeature,
             });"""
-    if "<table></table>" not in popFuncs:
+    if popFuncs:
         popup += """{popFuncs}
         """.format(popFuncs=popFuncs)
     popup += "}"
@@ -910,6 +1002,14 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         col2.className="col3";
         col2.id = "menu";
         col2.style.display = "inline-block";
+        var menuTitle = document.createElement('h2');
+        menuTitle.className = "menu-title";
+        menuTitle.textContent = "Leválogatás";
+        col2.appendChild(menuTitle);
+        var menuSubtitle = document.createElement('h3');
+        menuSubtitle.className = "menu-subtitle";
+        menuSubtitle.textContent = "Különböző szempontok szerint";
+        col2.appendChild(menuSubtitle);
         mapDiv.parentNode.insertBefore(row, mapDiv);
         document.getElementById("all").appendChild(col1);
         document.getElementById("all").appendChild(col2);
@@ -1023,6 +1123,10 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                 endHTML += """
             document.getElementById("menu").appendChild(
                 document.createElement("div"));
+            var lab_{nameS} = document.createElement('div');
+            lab_{nameS}.innerHTML = '{name}';
+            lab_{nameS}.className = 'filterlabel';
+            document.getElementById("menu").appendChild(lab_{nameS});
             var div_{nameS} = document.createElement('div');
             div_{nameS}.id = "div_{nameS}";
             div_{nameS}.className= "filterselect";
@@ -1046,13 +1150,9 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                 endHTML += """
             sel_{nameS}.innerHTML = {nameS}_options_str;
             div_{nameS}.appendChild(sel_{nameS});
-            var lab_{nameS} = document.createElement('div');
-            lab_{nameS}.innerHTML = '{name}';
-            lab_{nameS}.className = 'filterlabel';
-            div_{nameS}.appendChild(lab_{nameS});
             var reset_{nameS} = document.createElement('div');
-            reset_{nameS}.innerHTML = 'clear filter';
-            reset_{nameS}.className = 'filterlabel';
+            reset_{nameS}.innerHTML = 'Szűrő törlése';
+            reset_{nameS}.className = 'filterlabel filterreset';
             reset_{nameS}.onclick = function() {{
                 var options = document.getElementById("sel_{nameS}").options;
                 for (var i=0; i < options.length; i++) {{
@@ -1066,18 +1166,17 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                 endHTML += """
             document.getElementById("menu").appendChild(
                 document.createElement("div"));
-            var div_{nameS} = document.createElement("div");
-            div_{nameS}.id = "div_{nameS}";
-            div_{nameS}.className = "slider";
-            document.getElementById("menu").appendChild(div_{nameS});
             var lab_{nameS} = document.createElement('div');
             lab_{nameS}.innerHTML  = '{name}: <span id="val_{nameS}"></span>';
             lab_{nameS}.className = 'filterlabel';
             document.getElementById("menu").appendChild(lab_{nameS});
+            var div_{nameS} = document.createElement("div");
+            div_{nameS}.id = "div_{nameS}";
+            div_{nameS}.className = "slider";
+            document.getElementById("menu").appendChild(div_{nameS});
             var reset_{nameS} = document.createElement('div');
-            reset_{nameS}.innerHTML = 'clear filter';
-            reset_{nameS}.className = 'filterlabel';
-            lab_{nameS}.className = 'filterlabel';
+            reset_{nameS}.innerHTML = 'Szűrő törlése';
+            reset_{nameS}.className = 'filterlabel filterreset';
             reset_{nameS}.onclick = function() {{
                 sel_{nameS}.noUiSlider.reset();
             }};
@@ -1170,6 +1269,10 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                 endHTML += """
             document.getElementById("menu").appendChild(
                 document.createElement("div"));
+            var lab_{nameS}_date1 = document.createElement('div');
+            lab_{nameS}_date1.innerHTML  = '{name} from';
+            lab_{nameS}_date1.className = 'filterlabel';
+            document.getElementById("menu").appendChild(lab_{nameS}_date1);
             var div_{nameS}_date1 = document.createElement("div");
             div_{nameS}_date1.id = "div_{nameS}_date1";
             div_{nameS}_date1.className= "filterselect";
@@ -1178,14 +1281,9 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             dat_{nameS}_date1.type = "text";
             dat_{nameS}_date1.id = "dat_{nameS}_date1";
             div_{nameS}_date1.appendChild(dat_{nameS}_date1);
-            var lab_{nameS}_date1 = document.createElement('div');
-            lab_{nameS}_date1.innerHTML  = '{name} from';
-            lab_{nameS}_date1.className = 'filterlabel';
-            document.getElementById("div_{nameS}_date1").appendChild(
-                lab_{nameS}_date1);
             var reset_{nameS}_date1 = document.createElement('div');
-            reset_{nameS}_date1.innerHTML = "clear";
-            reset_{nameS}_date1.className = 'filterlabel';
+            reset_{nameS}_date1.innerHTML = 'Törlés';
+            reset_{nameS}_date1.className = 'filterlabel filterreset';
             reset_{nameS}_date1.onclick = function() {{
                 tail.DateTime("#dat_{nameS}_date1", {{
                     dateStart: {ds},
@@ -1242,6 +1340,10 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                        d=d, t=t, Y2=Y2, M2=M2, D2=D2, hh2=hh2, mm2=mm2,
                        ss2=ss2)
                 endHTML += """
+            var lab_{nameS}_date2 = document.createElement('div');
+            lab_{nameS}_date2.innerHTML  = '{name} till';
+            lab_{nameS}_date2.className = 'filterlabel';
+            document.getElementById("menu").appendChild(lab_{nameS}_date2);
             var div_{nameS}_date2 = document.createElement("div");
             div_{nameS}_date2.id = "div_{nameS}_date2";
             div_{nameS}_date2.className= "filterselect";
@@ -1250,14 +1352,9 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             dat_{nameS}_date2.type = "text";
             dat_{nameS}_date2.id = "dat_{nameS}_date2";
             div_{nameS}_date2.appendChild(dat_{nameS}_date2);
-            var lab_{nameS}_date2 = document.createElement('div');
-            lab_{nameS}_date2.innerHTML  = '{name} till';
-            lab_{nameS}_date2.className = 'filterlabel';
-            document.getElementById("div_{nameS}_date2")
-              .appendChild(lab_{nameS}_date2);
             var reset_{nameS}_date2 = document.createElement('div');
-            reset_{nameS}_date2.innerHTML = "clear";
-            reset_{nameS}_date2.className = 'filterlabel';
+            reset_{nameS}_date2.innerHTML = 'Törlés';
+            reset_{nameS}_date2.className = 'filterlabel filterreset';
             reset_{nameS}_date2.onclick = function() {{
                 tail.DateTime("#dat_{nameS}_date2", {{
                     dateStart: {ds},
