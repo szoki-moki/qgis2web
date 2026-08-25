@@ -41,12 +41,14 @@
   font: 12px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
   margin-top: 10px;
   margin-left: 10px;
-  margin-right: 0px;
+  margin-right: 10px;
   margin-bottom: 10px;
 }
 .filterselect input, .filterselect select {
     display: block;
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 .filterselect p{
   
@@ -123,9 +125,10 @@
 .tail-datetime-calendar{
     top: 0;
     left: 0;
-    width: 360px;
+    width: min(360px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
     height: auto;
-    margin: 15px;
+    margin: 12px;
     padding: 0;
     z-index: 3000;
     display: block;
@@ -825,5 +828,41 @@
     border-radius: 3px 0 0 3px;
 }
 /* @end RTL */
+
+@media (max-width: 899px) {
+    .filterselect input,
+    .filterselect select {
+        min-height: 40px;
+        font-size: 16px;
+    }
+    .filterreset {
+        min-height: 40px;
+        padding: 8px 12px;
+        box-sizing: border-box;
+    }
+    .tail-datetime-calendar:not(.calendar-static) {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        margin: 0;
+        overflow-y: auto;
+        transform: translate(-50%, -50%);
+    }
+}
+
+@media (max-width: 399px) {
+    .tail-datetime-calendar .calendar-timepicker .timepicker-field {
+        padding-right: 4px;
+        padding-left: 4px;
+    }
+    .tail-datetime-calendar .calendar-timepicker .timepicker-field input[type="text"] {
+        width: 68px;
+    }
+    .tail-datetime-calendar .calendar-timepicker .timepicker-field button.picker-step {
+        right: 5px;
+    }
+}
 
 /*# sourceMappingURL=tail.datetime-harx-light.map */

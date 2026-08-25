@@ -272,6 +272,8 @@ def writeHTMLstart(outputIndex, webpage_name, cluster_set, address, measure,
               "@QGIS2WEBJS@": qgis2webJS,
               "@MAP_WIDTH@": str(canvasSize.width()) + "px",
               "@MAP_HEIGHT@": str(canvasSize.height()) + "px",
+              "@MAP_ASPECT_RATIO@": str(
+                  canvasSize.width() / max(canvasSize.height(), 1)),
               "@EXP_JS@": exp_js,
               "@OL3_BACKGROUNDCOLOR@": "",
               "@OL3_STYLEVARS@": "",
@@ -307,15 +309,152 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             background-color: """ + backgroundColor + """
         }
         html, body, #map {
-			overflow: hidden;
+            overflow: hidden;
         }
-        .col9{
-			height: 100%!important;
-		}
-		.col3{
-			height: 100%;
-			overflow: auto;
-		}
+        body.qgis2web-canvas-size:not(.qgis2web-has-filters) {
+            overflow: auto;
+        }
+        .qgis2web-layout {
+            position: relative;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 340px);
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .qgis2web-map-panel {
+            min-width: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+        .qgis2web-has-filters #map {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
+            aspect-ratio: auto;
+        }
+        .qgis2web-filter-panel#menu {
+            box-sizing: border-box;
+            width: auto;
+            height: 100%;
+            min-width: 0;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            background-color: """ + widgetBackground + """;
+        }
+        .qgis2web-filter-toggle,
+        .qgis2web-filter-close,
+        .qgis2web-filter-backdrop {
+            display: none;
+        }
+        @media (max-width: 899px) {
+            .qgis2web-layout {
+                display: block;
+            }
+            .qgis2web-map-panel {
+                width: 100%;
+                height: 100%;
+            }
+            .qgis2web-filter-panel#menu {
+                position: fixed;
+                top: 0;
+                right: 0;
+                z-index: 2200;
+                width: min(88vw, 360px);
+                max-width: calc(100vw - 44px);
+                height: 100vh;
+                height: 100dvh;
+                padding-top: calc(54px + env(safe-area-inset-top));
+                padding-right: env(safe-area-inset-right);
+                transform: translateX(105%);
+                visibility: hidden;
+                box-shadow: -8px 0 28px rgba(0, 0, 0, 0.24);
+                transition: transform 220ms ease, visibility 0s linear 220ms;
+            }
+            .qgis2web-filter-toggle {
+                position: fixed;
+                top: calc(10px + env(safe-area-inset-top));
+                right: calc(10px + env(safe-area-inset-right));
+                z-index: 1800;
+                display: inline-flex;
+                min-width: 44px;
+                min-height: 44px;
+                padding: 0 14px;
+                align-items: center;
+                justify-content: center;
+                font: 600 14px/1 "Helvetica Neue", Arial, sans-serif;
+                color: """ + fontColor + """;
+                background: """ + widgetBackground + """;
+                border: 1px solid rgba(31, 77, 58, 0.3);
+                border-radius: 8px;
+                box-shadow: 0 3px 14px rgba(0, 0, 0, 0.25);
+                cursor: pointer;
+            }
+            .qgis2web-filter-close {
+                position: absolute;
+                top: calc(8px + env(safe-area-inset-top));
+                right: calc(8px + env(safe-area-inset-right));
+                z-index: 1;
+                display: inline-flex;
+                width: 44px;
+                height: 44px;
+                padding: 0;
+                align-items: center;
+                justify-content: center;
+                font: 30px/1 Arial, sans-serif;
+                color: """ + fontColor + """;
+                background: transparent;
+                border: 0;
+                border-radius: 6px;
+                cursor: pointer;
+            }
+            .qgis2web-filter-close:hover,
+            .qgis2web-filter-close:focus-visible,
+            .qgis2web-filter-toggle:hover,
+            .qgis2web-filter-toggle:focus-visible {
+                background-color: rgba(31, 77, 58, 0.12);
+                outline: 2px solid rgba(31, 77, 58, 0.45);
+                outline-offset: 2px;
+            }
+            .qgis2web-filter-backdrop {
+                position: fixed;
+                inset: 0;
+                z-index: 2100;
+                display: block;
+                background: rgba(12, 30, 23, 0.38);
+                opacity: 0;
+                visibility: hidden;
+                transition: opacity 220ms ease, visibility 0s linear 220ms;
+            }
+            .qgis2web-filter-open .qgis2web-filter-panel#menu {
+                transform: translateX(0);
+                visibility: visible;
+                transition: transform 220ms ease;
+            }
+            .qgis2web-filter-open .qgis2web-filter-backdrop {
+                opacity: 1;
+                visibility: visible;
+                transition: opacity 220ms ease;
+            }
+        }
+        @media (max-width: 479px) {
+            .qgis2web-filter-panel#menu {
+                width: 94vw;
+                max-width: none;
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .qgis2web-filter-panel#menu,
+            .qgis2web-filter-backdrop {
+                transition: none;
+            }
+        }
         .leaflet-control.info {
             position: relative;
             box-sizing: border-box;
@@ -361,7 +500,7 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
         }
         .leaflet-container {
             background: #fff;
-            padding-right: 10px;
+            padding-right: 0;
         }
         .leaflet-popup-scrolled {
             border-bottom: unset!important;
@@ -369,7 +508,10 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
         }
         .leaflet-popup-content{
             max-height: 70vh;
+            max-height: 70dvh;
             max-width: 70vw;
+            overflow: auto;
+            overflow-wrap: anywhere;
         }
         .leaflet-popup-content.media{
             width: auto!important;
@@ -386,11 +528,13 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
         }
         .leaflet-popup-content td img {
             max-height: 60vh;
+            max-height: 60dvh;
             max-width: 60vw;
         }
         .leaflet-popup-content video.popup-media {
             width: 400px;
             max-height: 60vh;
+            max-height: 60dvh;
             max-width: 60vw;
         }
         .leaflet-popup-content audio.popup-media {
@@ -565,7 +709,16 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
 		}
         .leaflet-control-layers-expanded {
 			padding-left: 6px;
-		}	
+			max-width: min(360px, calc(100vw - 80px));
+		}
+        .leaflet-control-layers-list,
+        .leaflet-control-layers-scrollbar {
+            max-height: calc(100vh - 140px) !important;
+            max-height: calc(100dvh - 140px) !important;
+            overflow-x: hidden;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+		}
         .leaflet-control-layers-expanded .leaflet-control-layers-toggle {
             display: block;
             background-image: none;
@@ -596,6 +749,113 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
         }
         .leaflet-marker-icon{
             white-space: nowrap;
+        }
+        .leaflet-control-search .search-input,
+        .leaflet-control-measure .leaflet-control-measure-interaction {
+            box-sizing: border-box;
+            max-width: calc(100vw - 80px);
+        }
+        @media (max-width: 899px) {
+            .qgis2web-has-filters .leaflet-top.leaflet-right {
+                top: 56px;
+            }
+            .leaflet-control.info {
+                min-width: 0;
+                max-width: calc(100vw - 92px);
+                padding: 11px 14px 16px;
+                border-top-width: 3px;
+                border-radius: 9px;
+            }
+            .leaflet-control.info::after {
+                bottom: 8px;
+                left: 14px;
+                width: 40px;
+            }
+            .leaflet-control.info h2 {
+                font-size: clamp(18px, 5vw, 24px);
+                line-height: 1.12;
+            }
+            .leaflet-control-layers-expanded {
+                max-width: calc(100vw - 72px);
+                padding-left: 4px;
+            }
+            .leaflet-control-layers-list,
+            .leaflet-control-layers-scrollbar {
+                max-height: 52vh !important;
+                max-height: 52dvh !important;
+            }
+            .leaflet-control-layers label {
+                line-height: 1.55;
+            }
+            .leaflet-touch .leaflet-bar a,
+            .leaflet-touch .leaflet-control-layers-toggle,
+            .leaflet-touch .leaflet-control-geocoder-icon,
+            .leaflet-control-search .search-button,
+            .leaflet-touch .leaflet-control-measure .leaflet-control-measure-toggle {
+                box-sizing: border-box;
+                width: 44px !important;
+                height: 44px !important;
+                min-width: 44px;
+                min-height: 44px;
+                font-size: 18px !important;
+                line-height: 44px !important;
+            }
+            .leaflet-control-search .search-input {
+                width: min(230px, calc(100vw - 100px)) !important;
+                height: 44px !important;
+            }
+            .leaflet-control-measure .leaflet-control-measure-interaction {
+                width: min(280px, calc(100vw - 28px));
+                max-height: 70vh;
+                max-height: 70dvh;
+                overflow: auto;
+            }
+            .abstractUncollapsed {
+                max-width: min(190px, calc(100vw - 72px));
+                padding: 10px 12px;
+            }
+            .abstract-credit {
+                min-width: 0;
+            }
+            .abstract-credit-logo {
+                width: 110px;
+            }
+            .leaflet-popup-content {
+                width: auto !important;
+                max-width: calc(100vw - 76px);
+                max-height: 65vh;
+                max-height: 65dvh;
+                margin: 14px 18px;
+            }
+            .leaflet-popup-content table {
+                max-width: 100%;
+            }
+            .leaflet-popup-content td img,
+            .leaflet-popup-content video.popup-media,
+            .leaflet-popup-content audio.popup-media {
+                width: auto;
+                max-width: 100%;
+                height: auto;
+            }
+            .leaflet-bottom {
+                bottom: env(safe-area-inset-bottom);
+            }
+            .leaflet-left {
+                left: env(safe-area-inset-left);
+            }
+            .leaflet-right {
+                right: env(safe-area-inset-right);
+            }
+        }
+        @media (max-width: 479px) {
+            .leaflet-control.info {
+                max-width: calc(100vw - 76px);
+            }
+            .leaflet-popup-content {
+                max-width: calc(100vw - 54px);
+                margin-right: 12px;
+                margin-left: 12px;
+            }
         }
         """
         if (layersList == "Collapsed"):

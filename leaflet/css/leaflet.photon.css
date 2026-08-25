@@ -1,7 +1,9 @@
 ul.photon-autocomplete {
     position: absolute;
     background-color: white;
-    max-width: fit-content;
+    width: min(400px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    box-sizing: border-box;
     z-index: 1000;
     box-shadow: 0 4px 9px #999999;
     display: none;
@@ -50,36 +52,19 @@ ul.photon-autocomplete {
     border-top: 1px solid #eee;
 }
 .photon-input:focus {
-    width: 400px;
+    width: min(400px, calc(100vw - 80px));
+    max-width: calc(100vw - 80px);
+    box-sizing: border-box;
     border-radius: 10px;
 }
-@media all and (max-width:500px){
+@media all and (max-width: 899px) {
     #map .photon-input:focus {
-        width: 300px;
+        width: min(260px, calc(100vw - 100px));
+        max-width: calc(100vw - 100px);
         border-radius: 10px;
     }
-}
-@media all and (max-width:400px){
     #map ul.photon-autocomplete {
-        position: relative;
-        background-color: white;
-        max-width: 400;
-        z-index: 1000;
-        box-shadow: 0 4px 9px #999999;
-        display: none;
-        margin: 0; /* Remove margins */
-        list-style-type: none; /* Remove bullets */
-        padding: 0; /* Remove padding */
-        font-family: Arial, sans-serif;
-    }
-    #map .photon-input:focus {
-        width: 200px;
-        border-radius: 10px;
-    }
-}
-@media all and (max-width:280px){
-    #map .photon-input:focus {
-        width: 150px;
-        border-radius: 10px;
+        width: min(320px, calc(100vw - 24px));
+        max-width: calc(100vw - 24px);
     }
 }

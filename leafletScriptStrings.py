@@ -651,15 +651,18 @@ def abstractSubScript(abstract, pos):
             this._div.id = 'abstract'""" % positionOpt
         if len(abstract) > 240:
             abstractSub += """
-                this._div.setAttribute("onmouseenter", "abstract.show()");
-                this._div.setAttribute("onmouseleave", "abstract.hide()");
+                this._div.setAttribute("onmouseenter",
+                    "if (window.matchMedia('(min-width: 900px)').matches) abstract.show()");
+                this._div.setAttribute("onmouseleave",
+                    "if (window.matchMedia('(min-width: 900px)').matches) abstract.hide()");
                 this.hide();
                 return this._div;
             };
             abstract.hide = function () {
                 this._div.classList.remove("abstractUncollapsed");
                 this._div.classList.add("abstract");
-                this._div.innerHTML = 'i'
+                this._div.innerHTML = 'i';
+                this._div.setAttribute('aria-expanded', 'false');
             }
             abstract.show = function () {
                 this._div.classList.remove("abstract");
@@ -671,6 +674,12 @@ def abstractSubScript(abstract, pos):
                 abstract.show();
                 return this._div;
             };
+            abstract.hide = function () {
+                this._div.classList.remove("abstractUncollapsed");
+                this._div.classList.add("abstract");
+                this._div.innerHTML = 'i';
+                this._div.setAttribute('aria-expanded', 'false');
+            }
             abstract.show = function () {
                 this._div.classList.remove("abstract");
                 this._div.classList.add("abstractUncollapsed");
@@ -683,8 +692,48 @@ def abstractSubScript(abstract, pos):
             if (abstractYear) {
                 abstractYear.textContent = new Date().getFullYear();
             }
+            this._div.setAttribute('aria-expanded', 'true');
         };
         abstract.addTo(map);"""
+        abstractSub += """
+        var abstractMediaQuery = window.matchMedia('(min-width: 900px)');
+        var abstractExpandedOnDesktop = %s;
+        var abstractControlElement = abstract.getContainer();
+        abstractControlElement.setAttribute('role', 'button');
+        abstractControlElement.setAttribute('tabindex', '0');
+        abstractControlElement.setAttribute('aria-label', 'Információ');
+        function toggleAbstractOnSmallScreen() {
+            if (!abstractMediaQuery.matches) {
+                if (abstractControlElement.classList.contains('abstract')) {
+                    abstract.show();
+                } else {
+                    abstract.hide();
+                }
+            }
+        }
+        function syncAbstractMode() {
+            if (abstractMediaQuery.matches && abstractExpandedOnDesktop) {
+                abstract.show();
+            } else {
+                abstract.hide();
+            }
+        }
+        abstractControlElement.addEventListener('click', function(event) {
+            toggleAbstractOnSmallScreen();
+            L.DomEvent.stopPropagation(event);
+        });
+        abstractControlElement.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleAbstractOnSmallScreen();
+            }
+        });
+        if (abstractMediaQuery.addEventListener) {
+            abstractMediaQuery.addEventListener('change', syncAbstractMode);
+        } else {
+            abstractMediaQuery.addListener(syncAbstractMode);
+        }
+        syncAbstractMode();""" % ("false" if len(abstract) > 240 else "true")
 
     return abstractSub
 
@@ -792,56 +841,37 @@ def addLayersList(baseMap, matchCRS, layer_list, groups, collapsedGroup, cluster
         """
     if expanded:
         layersList += """
-		document.addEventListener("DOMContentLoaded", function() {
-            // set new Layers List height which considers toggle icon
-            function newLayersListHeight() {
-                var layerScrollbarElement = document.querySelector('.leaflet-control-layers-scrollbar');
-                if (layerScrollbarElement) {
-                    var layersListElement = document.querySelector('.leaflet-control-layers-list');
-                    var originalHeight = layersListElement.style.height 
-                        || window.getComputedStyle(layersListElement).height;
-                    var newHeight = parseFloat(originalHeight) - 50;
-                    layersListElement.style.height = newHeight + 'px';
-                }
-            }
-            var isLayersListExpanded = true;
+        document.addEventListener("DOMContentLoaded", function() {
             var controlLayersElement = document.querySelector('.leaflet-control-layers');
             var toggleLayerControl = document.querySelector('.leaflet-control-layers-toggle');
-            // toggle Collapsed/Expanded and apply new Layers List height
-            toggleLayerControl.addEventListener('click', function() {
-                if (isLayersListExpanded) {
-                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
-                } else {
-                    controlLayersElement.classList.add('leaflet-control-layers-expanded');
+            if (!controlLayersElement || !toggleLayerControl) {
+                return;
+            }
+            var layersMediaQuery = window.matchMedia('(min-width: 900px)');
+            var isLayersListExpanded = layersMediaQuery.matches;
+            function setLayersListExpanded(isExpanded) {
+                isLayersListExpanded = isExpanded;
+                controlLayersElement.classList.toggle(
+                    'leaflet-control-layers-expanded', isExpanded);
+                toggleLayerControl.setAttribute(
+                    'aria-expanded', String(isExpanded));
+                if (typeof qgis2webInvalidateMapSize === 'function') {
+                    qgis2webInvalidateMapSize();
                 }
-                isLayersListExpanded = !isLayersListExpanded;
-                newLayersListHeight()
-            });	
-			// apply new Layers List height if toggle layerstree
-			if (controlLayersElement) {
-				controlLayersElement.addEventListener('click', function(event) {
-					var toggleLayerHeaderPointer = event.target.closest('.leaflet-layerstree-header-pointer span');
-					if (toggleLayerHeaderPointer) {
-						newLayersListHeight();
-					}
-				});
-			}
-            // Collapsed/Expanded at Start to apply new height
-            setTimeout(function() {
-                toggleLayerControl.click();
-            }, 10);
-            setTimeout(function() {
-                toggleLayerControl.click();
-            }, 10);
-            // Collapsed touch/small screen
-            var isSmallScreen = window.innerWidth < 650;
-            if (isSmallScreen) {
-                setTimeout(function() {
-                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
-                    isLayersListExpanded = !isLayersListExpanded;
-                }, 500);
-            }  
-        });       
+            }
+            toggleLayerControl.addEventListener('click', function() {
+                setLayersListExpanded(!isLayersListExpanded);
+            });
+            function syncLayersListMode() {
+                setLayersListExpanded(layersMediaQuery.matches);
+            }
+            if (layersMediaQuery.addEventListener) {
+                layersMediaQuery.addEventListener('change', syncLayersListMode);
+            } else {
+                layersMediaQuery.addListener(syncLayersListMode);
+            }
+            syncLayersListMode();
+        });
         """
     return layersList
 
@@ -988,25 +1018,66 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             document.getElementsByClassName('search-button')[1].className += ' fa fa-binoculars';
         }}""".format(searchLayer=searchLayer,
                     field=searchVals[1])
+    endHTML += """
+        var qgis2webResizeFrame = null;
+        function qgis2webInvalidateMapSize() {
+          if (qgis2webResizeFrame !== null) {
+            return;
+          }
+          var requestFrame = window.requestAnimationFrame || function(callback) {
+            return window.setTimeout(callback, 16);
+          };
+          qgis2webResizeFrame = requestFrame(function() {
+            qgis2webResizeFrame = null;
+            if (typeof map !== 'undefined' && map.invalidateSize) {
+              map.invalidateSize({pan: false, debounceMoveend: true});
+            }
+          });
+        }
+        window.addEventListener('resize', qgis2webInvalidateMapSize);
+        window.addEventListener('orientationchange', qgis2webInvalidateMapSize);
+        if (window.ResizeObserver) {
+          var qgis2webMapResizeObserver = new ResizeObserver(
+            qgis2webInvalidateMapSize);
+          var qgis2webMapElement = document.getElementById('map');
+          if (qgis2webMapElement) {
+            qgis2webMapResizeObserver.observe(qgis2webMapElement);
+          }
+        }
+        qgis2webInvalidateMapSize();
+        """
     filterItems = sorted(filterItems, key=lambda k: k['type'])
     filterNum = len(filterItems)
     if filterNum != 0:
         endHTML += """
         var mapDiv = document.getElementById('map');
+        document.body.classList.add('qgis2web-has-filters');
         var row = document.createElement('div');
-        row.className="row";
-        row.id="all";
-        row.style.height = "100%";
+        row.className = 'row qgis2web-layout';
+        row.id = 'all';
         var col1 = document.createElement('div');
-        col1.className="col9";
+        col1.className = 'col9 qgis2web-map-panel';
         col1.id = "mapWindow";
-        col1.style.height = "99%";
-        col1.style.width = "80%";
-        col1.style.display = "inline-block";
         var col2 = document.createElement('div');
-        col2.className="col3";
+        col2.className = 'col3 qgis2web-filter-panel';
         col2.id = "menu";
-        col2.style.display = "inline-block";
+        col2.setAttribute('role', 'complementary');
+        col2.setAttribute('aria-label', 'Szűrők');
+        var filterToggle = document.createElement('button');
+        filterToggle.type = 'button';
+        filterToggle.className = 'qgis2web-filter-toggle';
+        filterToggle.setAttribute('aria-controls', 'menu');
+        filterToggle.setAttribute('aria-expanded', 'false');
+        filterToggle.textContent = 'Szűrők';
+        var filterBackdrop = document.createElement('div');
+        filterBackdrop.className = 'qgis2web-filter-backdrop';
+        filterBackdrop.setAttribute('aria-hidden', 'true');
+        var filterClose = document.createElement('button');
+        filterClose.type = 'button';
+        filterClose.className = 'qgis2web-filter-close';
+        filterClose.setAttribute('aria-label', 'Szűrők bezárása');
+        filterClose.innerHTML = '&times;';
+        col2.appendChild(filterClose);
         var menuTitle = document.createElement('h2');
         menuTitle.className = "menu-title";
         menuTitle.textContent = "Leválogatás";
@@ -1016,9 +1087,63 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         menuSubtitle.textContent = "Különböző szempontok szerint";
         col2.appendChild(menuSubtitle);
         mapDiv.parentNode.insertBefore(row, mapDiv);
-        document.getElementById("all").appendChild(col1);
-        document.getElementById("all").appendChild(col2);
-        col1.appendChild(mapDiv)
+        row.appendChild(col1);
+        row.appendChild(filterToggle);
+        row.appendChild(filterBackdrop);
+        row.appendChild(col2);
+        col1.appendChild(mapDiv);
+
+        var filterMediaQuery = window.matchMedia('(min-width: 900px)');
+        var filterReturnFocus = null;
+        function setFilterPanelOpen(isOpen, restoreFocus) {
+          document.body.classList.toggle('qgis2web-filter-open', isOpen);
+          filterToggle.setAttribute('aria-expanded', String(isOpen));
+          if (filterMediaQuery.matches) {
+            col2.removeAttribute('aria-hidden');
+          } else {
+            col2.setAttribute('aria-hidden', String(!isOpen));
+          }
+          if (isOpen) {
+            filterReturnFocus = document.activeElement;
+            filterClose.focus();
+          } else if (restoreFocus && filterReturnFocus) {
+            filterReturnFocus.focus();
+          }
+          qgis2webInvalidateMapSize();
+        }
+        function syncFilterPanelMode() {
+          if (filterMediaQuery.matches) {
+            document.body.classList.remove('qgis2web-filter-open');
+            filterToggle.setAttribute('aria-expanded', 'false');
+            col2.removeAttribute('aria-hidden');
+          } else {
+            col2.setAttribute('aria-hidden', String(
+              !document.body.classList.contains('qgis2web-filter-open')));
+          }
+          qgis2webInvalidateMapSize();
+        }
+        filterToggle.addEventListener('click', function() {
+          setFilterPanelOpen(true, false);
+        });
+        filterClose.addEventListener('click', function() {
+          setFilterPanelOpen(false, true);
+        });
+        filterBackdrop.addEventListener('click', function() {
+          setFilterPanelOpen(false, true);
+        });
+        document.addEventListener('keydown', function(event) {
+          if (event.key === 'Escape' &&
+              document.body.classList.contains('qgis2web-filter-open')) {
+            setFilterPanelOpen(false, true);
+          }
+        });
+        if (filterMediaQuery.addEventListener) {
+          filterMediaQuery.addEventListener('change', syncFilterPanelMode);
+        } else {
+          filterMediaQuery.addListener(syncFilterPanelMode);
+        }
+        col2.addEventListener('transitionend', qgis2webInvalidateMapSize);
+        syncFilterPanelMode();
         var Filters = {"""
         filterList = []
         for item in range(0, filterNum):
