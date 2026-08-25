@@ -71,6 +71,16 @@ from qgis2web.writer import (Writer,
 from qgis2web.feedbackDialog import Feedback
 
 
+STATIC_ABSTRACT = (
+    '<div class="abstract-credit">'
+    '<span class="abstract-credit-label">Készítette:</span>'
+    '<img class="abstract-credit-logo" src="images/kambium-logo.png" '
+    'alt="Kambium">'
+    '<span class="abstract-credit-year"></span>'
+    '</div>'
+)
+
+
 class LeafletWriter(Writer):
     """
     Writer for creation of web maps based on the Leaflet
@@ -128,7 +138,7 @@ class LeafletWriter(Writer):
         project = QgsProject.instance()
         mapSettings = canvas.mapSettings()
         title = project.title()
-        abstract = project.metadata().abstract()
+        abstract = STATIC_ABSTRACT
         pluginDir = os.path.dirname(os.path.realpath(__file__))
         stamp = datetime.now().strftime("%Y_%m_%d-%H_%M_%S_%f")
         outputProjectFileName = os.path.join(outputProjectFileName,

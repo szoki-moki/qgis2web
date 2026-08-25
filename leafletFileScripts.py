@@ -105,6 +105,8 @@ def writeFoldersAndFiles(pluginDir, feedback, outputProjectFileName,
         shutil.copytree(imageDir, imageStore)
     else:
         os.makedirs(imageStore)
+    shutil.copyfile(os.path.join(imageDir, 'kambium-logo.png'),
+                    os.path.join(imageStore, 'kambium-logo.png'))
     if filterItems != []:
         shutil.copyfile(jsDir + 'tailDT.js',
                         jsStore + 'tailDT.js')
@@ -450,13 +452,39 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             line-height: 30px !important;
         }
         .abstractUncollapsed {
-            padding: 6px 8px;
+            padding: 14px 16px;
             font: 12px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
             background-color:""" + widgetBackground + """ !important;
             color: """ + fontColor + """ !important;
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            border-radius: 5px;
-            max-width: 40%;
+            border-radius: 8px;
+            max-width: min(240px, calc(100vw - 40px));
+        }
+        .abstract-credit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            min-width: 160px;
+            text-align: center;
+        }
+        .abstract-credit-label {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+        }
+        .abstract-credit-logo {
+            display: block;
+            width: 150px;
+            max-width: 100%;
+            height: auto;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+        .abstract-credit-year {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
         }
         .leaflet-control {
             box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4)!important;

@@ -678,6 +678,11 @@ def abstractSubScript(abstract, pos):
 
         abstractSub += abstract.replace("'", "\\'").replace("\n", "<br />")
         abstractSub += """';
+            var abstractYear = this._div.querySelector(
+                '.abstract-credit-year');
+            if (abstractYear) {
+                abstractYear.textContent = new Date().getFullYear();
+            }
         };
         abstract.addTo(map);"""
 
