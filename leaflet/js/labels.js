@@ -11,59 +11,92 @@ labelEngine = new labelgun.default(hideLabel, showLabel);
 var id = 0;
 var labels = [];
 var totalMarkers = 0;
+var labelResetRequest = null;
+var pendingLabelMarkers = null;
+
+function scheduleLabelReset(markers) {
+    pendingLabelMarkers = markers;
+    if (labelResetRequest !== null) {
+        return;
+    }
+
+    var scheduleFrame = window.requestAnimationFrame || function(callback) {
+        return window.setTimeout(callback, 16);
+    };
+    labelResetRequest = scheduleFrame(function() {
+        var markersToReset = pendingLabelMarkers;
+        labelResetRequest = null;
+        pendingLabelMarkers = null;
+        if (markersToReset) {
+            resetLabels(markersToReset);
+        }
+    });
+}
 
 function resetLabels(markers) {
     labelEngine.reset();
     var i = 0;
+    var mapRect = map.getContainer().getBoundingClientRect();
     for (var j = 0; j < markers.length; j++) {
         markers[j].eachLayer(function(label){
-            addLabel(label, ++i);
+            addLabel(label, ++i, mapRect);
         });
     }
-  labelEngine.update();
+    labelEngine.update();
 }
 
-function addLabel(layer, id) {
+function addLabel(layer, id, mapRect) {
 
-  var label = null;
+    var label = null;
+    var tooltip = layer.getTooltip && layer.getTooltip();
 
-  // Try tooltip first
-  if (layer.getTooltip && layer.getTooltip()) {
-      label = layer.getTooltip()._source._tooltip._container;
-  }
-  // Fall back to divIcon
-  else if (layer._icon) {
-      label = layer._icon;
-  }
+    // Try tooltip first
+    if (tooltip && tooltip._container) {
+        label = tooltip._container;
+    }
+    // Fall back to divIcon
+    else if (layer._icon) {
+        label = layer._icon;
+    }
 
-  if (label) {
+    var mapContainer = map.getContainer();
+    if (!label || !mapContainer.contains(label)) {
+        return;
+    }
 
-        // We need the bounding rectangle of the label itself
-        var rect = label.getBoundingClientRect();
+    // We need the bounding rectangle of the label itself
+    var rect = label.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+        return;
+    }
 
-        // We convert the container coordinates (screen space) to Lat/lng
-        var bottomLeft = map.containerPointToLatLng([rect.left, rect.bottom]);
-        var topRight = map.containerPointToLatLng([rect.right, rect.top]);
-        var boundingBox = {
-          bottomLeft : [bottomLeft.lng, bottomLeft.lat],
-          topRight   : [topRight.lng, topRight.lat]
-        };
+    mapRect = mapRect || mapContainer.getBoundingClientRect();
+    if (rect.right < mapRect.left || rect.left > mapRect.right ||
+            rect.bottom < mapRect.top || rect.top > mapRect.bottom) {
+        return;
+    }
 
-        // Ingest the label into labelgun itself
-        labelEngine.ingestLabel(
-          boundingBox,
-          id,
-          parseInt(Math.random() * (5 - 1) + 1), // Weight
-          label,
-          "Test " + id,
-          false
-        );
+    // We convert the container coordinates (screen space) to Lat/lng
+    var bottomLeft = map.containerPointToLatLng([
+        rect.left - mapRect.left,
+        rect.bottom - mapRect.top
+    ]);
+    var topRight = map.containerPointToLatLng([
+        rect.right - mapRect.left,
+        rect.top - mapRect.top
+    ]);
+    var boundingBox = {
+        bottomLeft: [bottomLeft.lng, bottomLeft.lat],
+        topRight: [topRight.lng, topRight.lat]
+    };
 
-        // If the label hasn't been added to the map already
-        // add it and set the added flag to true
-        if (!layer.added) {
-          layer.addTo(map);
-          layer.added = true;
-        }
-  }
+    // Label collision calculation must not add or remove map layers.
+    labelEngine.ingestLabel(
+        boundingBox,
+        id,
+        parseInt(Math.random() * (5 - 1) + 1), // Weight
+        label,
+        "Test " + id,
+        false
+    );
 }

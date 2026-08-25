@@ -1419,15 +1419,15 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         });"""
     if labelsList != "":
         endHTML += """
-        resetLabels([%s]);
+        scheduleLabelReset([%s]);
         map.on("zoomend", function(){
-            resetLabels([%s]);
+            scheduleLabelReset([%s]);
         });
         map.on("layeradd", function(){
-            resetLabels([%s]);
+            scheduleLabelReset([%s]);
         });
         map.on("layerremove", function(){
-            resetLabels([%s]);
+            scheduleLabelReset([%s]);
         });""" % (labelsList, labelsList, labelsList, labelsList)
     endHTML += """
         </script>%s""" % wfsLayers
