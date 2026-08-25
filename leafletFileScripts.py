@@ -7,6 +7,9 @@ import codecs
 from qgis2web.utils import replaceInTemplate
 
 
+LEAFLET_FONT_COLOR = "#1f4d3a"
+
+
 def writeFoldersAndFiles(pluginDir, feedback, outputProjectFileName,
                          cluster_set, measure, matchCRS, layerSearch,
                          filterItems, useOFM, canvas, address, locate, layersList):
@@ -295,6 +298,7 @@ def writeHTMLstart(outputIndex, webpage_name, cluster_set, address, measure,
 def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
              widgetBackground, layersList, labelBufferCSS=None):
     feedback.showFeedback("Writing CSS...")
+    fontColor = LEAFLET_FONT_COLOR
     with open(cssStore + 'qgis2web.css', 'w') as f_css:
         text = """
         #map {
@@ -314,7 +318,7 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             padding: 6px 8px;
             font: 14px/16px Arial, Helvetica, sans-serif;
             background-color:""" + widgetBackground + """ !important;
-            color: """ + widgetAccent + """ !important;
+            color: """ + fontColor + """ !important;
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
             border-radius: 5px;
         }
@@ -388,8 +392,11 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
         .leaflet-tooltip-left:before, .leaflet-tooltip-right:before {
             border: 0px;
         }
-        .fa, .leaflet-container, a {
+        .fa {
             color: """ + widgetAccent + """ !important;
+        }
+        .leaflet-container, a {
+            color: """ + fontColor + """ !important;
         }
         .leaflet-control-zoom-in, .leaflet-control-zoom-out,
         .leaflet-control-locate a,
@@ -398,14 +405,14 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
          .leaflet-control-measure {
             background-color: """ + widgetBackground + """ !important;
             border-radius: 0px !important;
-            color: """ + widgetAccent + """ !important;
+            color: """ + fontColor + """ !important;
         }
         .abstract {
             font: bold 18px 'Lucida Console', Monaco, monospace;
             text-indent: 1px;
             background-color: """ + widgetBackground + """ !important;
             width: 30px !important;
-            color: """ + widgetAccent + """ !important;
+            color: """ + fontColor + """ !important;
             height: 30px !important;
             text-align: center !important;
             line-height: 30px !important;
@@ -414,7 +421,7 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             padding: 6px 8px;
             font: 12px/1.5 "Helvetica Neue", Arial, Helvetica, sans-serif;
             background-color:""" + widgetBackground + """ !important;
-            color: """ + widgetAccent + """ !important;
+            color: """ + fontColor + """ !important;
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
             border-radius: 5px;
             max-width: 40%;
@@ -430,12 +437,12 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             border: 3px solid rgba(255,255,255,.4) !important;
         }
         .leaflet-control-attribution a {
-            color: #0078A8 !important;
+            color: """ + fontColor + """ !important;
         }
         .leaflet-control-scale-line {
             border: 2px solid """ + widgetBackground + """ !important;
             border-top: none !important;
-            color: black !important;
+            color: """ + fontColor + """ !important;
         }
         .leaflet-control-search .search-button {
             width: 30px !important;
@@ -459,6 +466,11 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
         .leaflet-control-search .search-input {
             margin: 0px 0px 0px 0px !important;
             height: 30px !important;
+            color: """ + fontColor + """ !important;
+        }
+        .leaflet-control-search .search-input::placeholder {
+            color: """ + fontColor + """ !important;
+            opacity: 0.75;
         }
         .leaflet-control-measure {
             background: none!important;
@@ -466,6 +478,7 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
         }
         .leaflet-control-measure .leaflet-control-measure-interaction {
             background-color: """ + widgetBackground + """ !important;
+            color: """ + fontColor + """ !important;
         }
         .leaflet-touch .leaflet-control-measure
         .leaflet-control-measure-toggle,
@@ -475,7 +488,7 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             height: 30px !important;
             border-radius: 0px !important;
             background-color: """ + widgetBackground + """ !important;
-            color: """ + widgetAccent + """ !important;
+            color: """ + fontColor + """ !important;
             font-size: 13px;
             line-height: 30px;
             text-align: center;
@@ -487,7 +500,7 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
 			flex-direction: column;
 			align-items: flex-end;
             background-color: """ + widgetBackground + """ !important;
-            color: """ + widgetAccent + """ !important;
+            color: """ + fontColor + """ !important;
 
 		}
         .leaflet-control-layers-expanded {
@@ -502,7 +515,7 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
         .leaflet-control-layers-expanded .leaflet-control-layers-toggle::after {
             content: '»';
             font-size: x-large;
-            color: """ + widgetAccent + """ !important;
+            color: """ + fontColor + """ !important;
             display: flex;
             align-items: center;
             justify-content: center;

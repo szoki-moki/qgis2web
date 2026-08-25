@@ -1163,11 +1163,16 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             div_{nameS}.appendChild(reset_{nameS});
                 """.format(name=itemName, nameS=safeName(itemName))
             if filterItems[item]["type"] in ["int", "real"]:
+                filterName = itemName.strip().rstrip(":")
+                filterUnit = {
+                    "Átmérő": " cm",
+                    "Becsült kor": " év",
+                }.get(filterName, "")
                 endHTML += """
             document.getElementById("menu").appendChild(
                 document.createElement("div"));
             var lab_{nameS} = document.createElement('div');
-            lab_{nameS}.innerHTML  = '{name}: <span id="val_{nameS}"></span>';
+            lab_{nameS}.innerHTML  = '{name}: <span id="val_{nameS}"></span>{unit}';
             lab_{nameS}.className = 'filterlabel';
             document.getElementById("menu").appendChild(lab_{nameS});
             var div_{nameS} = document.createElement("div");
@@ -1182,7 +1187,8 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             }};
             document.getElementById("menu").appendChild(reset_{nameS});
             var sel_{nameS} = document.getElementById('div_{nameS}');
-            """ .format(name=itemName, nameS=safeName(itemName))
+            """ .format(name=itemName, nameS=safeName(itemName),
+                         unit=filterUnit)
                 if filterItems[item]["type"] == "int":
                     endHTML += """
             noUiSlider.create(sel_{nameS}, {{
