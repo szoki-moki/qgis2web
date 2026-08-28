@@ -925,7 +925,11 @@ def addressSearchScript(method):
         // Create the new button element
         var button = document.createElement("div");
         button.id = "gcd-button-control";
-        button.className = "gcd-gl-btn fa fa-search search-button";
+        button.className = "gcd-gl-btn search-button qgis2web-search-position";
+        button.setAttribute("role", "button");
+        button.setAttribute("tabindex", "0");
+        button.setAttribute("aria-label", "Hely keresése");
+        button.setAttribute("title", "Hely keresése");
 
         // Insert the button at the beginning of the search control
         search.insertBefore(button, search.firstChild);
@@ -936,6 +940,12 @@ def addressSearchScript(method):
                 last.style.display = "block";
             }} else {{
                 last.style.display = "none";
+            }}
+        }});
+        button.addEventListener("keydown", function (e) {{
+            if (e.key === "Enter" || e.key === " ") {{
+                e.preventDefault();
+                button.click();
             }}
         }});
         """
@@ -1007,15 +1017,18 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
     if layerSearch != "None":
         searchVals = layerSearch.split(": ")
         endHTML += """
-        map.addControl(new L.Control.Search({{
+        var layerSearchControl = new L.Control.Search({{
             layer: {searchLayer},
             initial: false,
             hideMarkerOnCollapse: true,
-            propertyName: '{field}'}}));
-        if (typeof url === 'undefined') {{
-            document.getElementsByClassName('search-button')[0].className += ' fa fa-binoculars';
-        }} else {{
-            document.getElementsByClassName('search-button')[1].className += ' fa fa-binoculars';
+            propertyName: '{field}'}});
+        map.addControl(layerSearchControl);
+        var layerSearchButton = layerSearchControl._container.querySelector(
+            '.search-button');
+        if (layerSearchButton) {{
+            layerSearchButton.classList.add('qgis2web-search-trees');
+            layerSearchButton.setAttribute('aria-label', 'Fák keresése');
+            layerSearchButton.setAttribute('title', 'Fák keresése');
         }}""".format(searchLayer=searchLayer,
                     field=searchVals[1])
     endHTML += """

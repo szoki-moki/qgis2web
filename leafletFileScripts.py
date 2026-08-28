@@ -22,6 +22,7 @@ def writeFoldersAndFiles(pluginDir, feedback, outputProjectFileName,
     dataStore = os.path.join(outputProjectFileName, 'data')
     os.makedirs(dataStore)
     imageDir = pluginDir + os.sep + 'leaflet' + os.sep + 'images' + os.sep
+    iconDir = pluginDir + os.sep + 'icons' + os.sep
     imageStore = os.path.join(outputProjectFileName, 'images')
     legendStore = os.path.join(outputProjectFileName, 'legend')
     os.makedirs(legendStore)
@@ -109,6 +110,13 @@ def writeFoldersAndFiles(pluginDir, feedback, outputProjectFileName,
         os.makedirs(imageStore)
     shutil.copyfile(os.path.join(imageDir, 'kambium-logo.png'),
                     os.path.join(imageStore, 'kambium-logo.png'))
+    if address:
+        shutil.copyfile(os.path.join(iconDir, 'search_position_icon.png'),
+                        os.path.join(imageStore,
+                                     'search_position_icon.png'))
+    if layerSearch != "None":
+        shutil.copyfile(os.path.join(iconDir, 'search_trees_icon.png'),
+                        os.path.join(imageStore, 'search_trees_icon.png'))
     if filterItems != []:
         # At this stage filterItems contains QListWidgetItem instances. The
         # normalized filter dictionaries are only available to
@@ -666,10 +674,17 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             text-align: center !important;
             cursor: pointer;
         }
-        .search-button.fa.fa-binoculars{
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        .leaflet-control-search .qgis2web-search-position,
+        .leaflet-control-search .qgis2web-search-trees {
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            background-size: 24px 24px !important;
+        }
+        .leaflet-control-search .qgis2web-search-position {
+            background-image: url('../images/search_position_icon.png') !important;
+        }
+        .leaflet-control-search .qgis2web-search-trees {
+            background-image: url('../images/search_trees_icon.png') !important;
         }
         .leaflet-control-measure .leaflet-control {
             width: 30px !important;
@@ -814,6 +829,10 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             .leaflet-control-search .search-input {
                 width: min(230px, calc(100vw - 100px)) !important;
                 height: 44px !important;
+            }
+            .leaflet-control-search .qgis2web-search-position,
+            .leaflet-control-search .qgis2web-search-trees {
+                background-size: 32px 32px !important;
             }
             .leaflet-control-measure .leaflet-control-measure-interaction {
                 width: min(280px, calc(100vw - 28px));
