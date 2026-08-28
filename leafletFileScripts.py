@@ -628,7 +628,8 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             flex-direction: column;
             align-items: center;
             gap: 8px;
-            min-width: 160px;
+            width: 100px;
+            min-width: 0;
             text-align: center;
         }
         .abstract-credit-label {
@@ -636,9 +637,13 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
             font-weight: 700;
             letter-spacing: 0.03em;
         }
+        .abstract-credit-link {
+            display: block;
+            line-height: 0;
+        }
         .abstract-credit-logo {
             display: block;
-            width: 150px;
+            width: 100px;
             max-width: 100%;
             height: auto;
             object-fit: contain;
@@ -737,6 +742,16 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
 			padding-left: 6px;
 			max-width: min(360px, calc(100vw - 80px));
 		}
+        .qgis2web-layers-title {
+            box-sizing: border-box;
+            width: 100%;
+            margin: 2px 0 8px;
+            padding: 0 4px;
+            color: """ + fontColor + """ !important;
+            font-size: 16px;
+            line-height: 1.2;
+            font-weight: 700;
+        }
         .leaflet-control-layers-list,
         .leaflet-control-layers-scrollbar {
             max-height: calc(100vh - 140px) !important;
@@ -845,10 +860,11 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
                 padding: 10px 12px;
             }
             .abstract-credit {
+                width: 55px;
                 min-width: 0;
             }
             .abstract-credit-logo {
-                width: 110px;
+                width: 55px;
             }
             .leaflet-popup-content {
                 width: auto !important;

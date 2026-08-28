@@ -643,13 +643,15 @@ def abstractSubScript(abstract, pos):
         positionOpt = u"{'position':'topleft'}"
     abstractSub = ""
     if pos != "None":
+        expanded_on_desktop = ('abstract-credit-logo' in abstract or
+                               len(abstract) <= 240)
         abstractSub += """
         var abstract = new L.Control(%s);
         abstract.onAdd = function (map) {
             this._div = L.DomUtil.create('div',
             'leaflet-control abstract');
             this._div.id = 'abstract'""" % positionOpt
-        if len(abstract) > 240:
+        if not expanded_on_desktop:
             abstractSub += """
                 this._div.setAttribute("onmouseenter",
                     "if (window.matchMedia('(min-width: 900px)').matches) abstract.show()");
@@ -692,6 +694,11 @@ def abstractSubScript(abstract, pos):
             if (abstractYear) {
                 abstractYear.textContent = new Date().getFullYear();
             }
+            var abstractCreditLink = this._div.querySelector(
+                '.abstract-credit-link');
+            if (abstractCreditLink) {
+                L.DomEvent.disableClickPropagation(abstractCreditLink);
+            }
             this._div.setAttribute('aria-expanded', 'true');
         };
         abstract.addTo(map);"""
@@ -733,7 +740,7 @@ def abstractSubScript(abstract, pos):
         } else {
             abstractMediaQuery.addListener(syncAbstractMode);
         }
-        syncAbstractMode();""" % ("false" if len(abstract) > 240 else "true")
+        syncAbstractMode();""" % ("true" if expanded_on_desktop else "false")
 
     return abstractSub
 
@@ -838,6 +845,15 @@ def addLayersList(baseMap, matchCRS, layer_list, groups, collapsedGroup, cluster
         """  
     layersList += """
         lay.addTo(map);
+        var layersControlList = lay.getContainer().querySelector(
+            '.leaflet-control-layers-list');
+        if (layersControlList) {
+            var layersControlTitle = document.createElement('h2');
+            layersControlTitle.className = 'qgis2web-layers-title';
+            layersControlTitle.textContent = 'Rétegek';
+            layersControlList.insertBefore(
+                layersControlTitle, layersControlList.firstChild);
+        }
         """
     if expanded:
         layersList += """

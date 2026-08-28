@@ -74,8 +74,12 @@ from qgis2web.feedbackDialog import Feedback
 STATIC_ABSTRACT = (
     '<div class="abstract-credit">'
     '<span class="abstract-credit-label">Készítette:</span>'
+    '<a class="abstract-credit-link" '
+    'href="https://www.facebook.com/kambiumfa" target="_blank" '
+    'rel="noopener noreferrer" aria-label="Kambium Facebook-oldala">'
     '<img class="abstract-credit-logo" src="images/kambium-logo.png" '
     'alt="Kambium">'
+    '</a>'
     '<span class="abstract-credit-year"></span>'
     '</div>'
 )
