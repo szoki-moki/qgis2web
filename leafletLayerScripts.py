@@ -288,28 +288,40 @@ def getLabels(layer, safeLayerName, outputProjectFileName, vts, vtLabels,
                 fn = palyr.fieldName
                 f = "layer.feature.properties['%s']" % handleHiddenField(layer,
                                                                          fn)
-            labeltext = ".bindTooltip((" + str(f)
-            labeltext += " !== null?String(%s%s)%s:'')" % (styleStart,
-                                                           str(f),
-                                                           styleEnd)
-            labeltext += ", {permanent: true, offset: [-0, -16], "
-            labeltext += "className: 'css_%s'}" % safeLayerName
-            labeltext += ");"
+            bindTooltip = "layer.bindTooltip((" + str(f)
+            bindTooltip += " !== null?String(%s%s)%s:'')" % (styleStart,
+                                                             str(f),
+                                                             styleEnd)
+            bindTooltip += ", {permanent: true, direction: 'top', "
+            bindTooltip += ("offset: [0, -16], className: 'css_%s'}" %
+                            safeLayerName)
+            bindTooltip += ");"
             if vts is None:
+                # Configure the GeoJSON layer's onEachFeature callback once so
+                # labels are also attached when attribute filters call
+                # clearLayers()/addData(). Existing features need one initial
+                # pass because the callback is installed after construction.
                 labeltext = """
-        var i = 0;
-        layer_%s.eachLayer(function(layer) {
+        function bindLabel_%s(feature, layer) {
             var context = {
-                feature: layer.feature,
+                feature: feature,
                 variables: {}
             };
-            layer%s
-            labels.push(layer);
-            totalMarkers += 1;
-              layer.added = true;
-              addLabel(layer, i);
-              i++;
-        });""" % (safeLayerName, labeltext)
+            %s
+        }
+        var previousOnEachFeature_%s = layer_%s.options.onEachFeature;
+        layer_%s.options.onEachFeature = function(feature, layer) {
+            if (previousOnEachFeature_%s) {
+                previousOnEachFeature_%s(feature, layer);
+            }
+            bindLabel_%s(feature, layer);
+        };
+        layer_%s.eachLayer(function(layer) {
+            bindLabel_%s(layer.feature, layer);
+        });""" % (safeLayerName, bindTooltip, safeLayerName,
+                    safeLayerName, safeLayerName, safeLayerName,
+                    safeLayerName, safeLayerName, safeLayerName,
+                    safeLayerName)
             else:
                 if palyr.isExpression:
                     labelVal = f

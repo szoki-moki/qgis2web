@@ -12,7 +12,8 @@ LEAFLET_FONT_COLOR = "#1f4d3a"
 
 def writeFoldersAndFiles(pluginDir, feedback, outputProjectFileName,
                          cluster_set, measure, matchCRS, layerSearch,
-                         filterItems, useOFM, canvas, address, locate, layersList):
+                         filterItems, useOFM, canvas, address, locate,
+                         layersList, useLabelgun=False):
     feedback.showFeedback("Exporting libraries...")
     jsStore = os.path.join(outputProjectFileName, 'js')
     os.makedirs(jsStore)
@@ -44,12 +45,13 @@ def writeFoldersAndFiles(pluginDir, feedback, outputProjectFileName,
                     jsStore + 'leaflet-svg-shape-markers.min.js')
     shutil.copyfile(jsDir + 'leaflet.pattern.js',
                     jsStore + 'leaflet.pattern.js')
-    shutil.copyfile(jsDir + 'rbush.min.js',
-                    jsStore + 'rbush.min.js')
-    shutil.copyfile(jsDir + 'labelgun.min.js',
-                    jsStore + 'labelgun.min.js')
-    shutil.copyfile(jsDir + 'labels.js',
-                    jsStore + 'labels.js')
+    if useLabelgun:
+        shutil.copyfile(jsDir + 'rbush.min.js',
+                        jsStore + 'rbush.min.js')
+        shutil.copyfile(jsDir + 'labelgun.min.js',
+                        jsStore + 'labelgun.min.js')
+        shutil.copyfile(jsDir + 'labels.js',
+                        jsStore + 'labels.js')
     shutil.copyfile(jsDir + 'leaflet.js', jsStore + 'leaflet.js')
     shutil.copyfile(jsDir + 'leaflet.js.map', jsStore + 'leaflet.js.map')
     shutil.copyfile(cssDir + 'leaflet.css', cssStore + 'leaflet.css')
@@ -108,6 +110,9 @@ def writeFoldersAndFiles(pluginDir, feedback, outputProjectFileName,
     shutil.copyfile(os.path.join(imageDir, 'kambium-logo.png'),
                     os.path.join(imageStore, 'kambium-logo.png'))
     if filterItems != []:
+        # At this stage filterItems contains QListWidgetItem instances. The
+        # normalized filter dictionaries are only available to
+        # writeHTMLstart(), which decides whether tailDT.js is referenced.
         shutil.copyfile(jsDir + 'tailDT.js',
                         jsStore + 'tailDT.js')
         shutil.copyfile(cssDir + 'filter.css',
@@ -140,7 +145,8 @@ def writeFoldersAndFiles(pluginDir, feedback, outputProjectFileName,
 def writeHTMLstart(outputIndex, webpage_name, cluster_set, address, measure,
                    matchCRS, layerSearch, filterItems, useOFM, canvas, locate,
                    qgis2webJS, template, feedback, useMultiStyle, useHeat,
-                   useShapes, useOSMB, useWMS, useWMTS, useVT):
+                   useShapes, useOSMB, useWMS, useWMTS, useVT,
+                   useLabelgun=False):
     useCluster = False
     for cluster in cluster_set:
         if cluster:
@@ -198,7 +204,10 @@ def writeHTMLstart(outputIndex, webpage_name, cluster_set, address, measure,
         layerFilterCSS += 'href="css/filter.css">\n'
         layerFilterCSS += '<link rel="stylesheet" '
         layerFilterCSS += 'href="css/nouislider.min.css">'
-        layerFilterJS = '<script src="js/tailDT.js"></script>\n'
+        layerFilterJS = ''
+        if any(item["type"] in ["date", "datetime", "time"]
+               for item in filterItems):
+            layerFilterJS += '<script src="js/tailDT.js"></script>\n'
         layerFilterJS += '<script src="js/nouislider.min.js"></script>\n'
         layerFilterJS += '<script src="js/wNumb.js"></script>'
     else:
@@ -230,7 +239,9 @@ def writeHTMLstart(outputIndex, webpage_name, cluster_set, address, measure,
         measureCSS = ""
         measureJS = ""
     extraJS = """<script src="js/leaflet-hash.js"></script>
-        <script src="js/Autolinker.min.js"></script>
+        <script src="js/Autolinker.min.js"></script>"""
+    if useLabelgun:
+        extraJS += """
         <script src="js/rbush.min.js"></script>
         <script src="js/labelgun.min.js"></script>
         <script src="js/labels.js"></script>"""

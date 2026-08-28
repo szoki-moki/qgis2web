@@ -177,12 +177,28 @@ class LeafletWriter(Writer):
             for layer in layer_list
         )
 
+        # Permanent labels use Labelgun collision suppression. Vector-tile
+        # labels are handled separately because their features cannot be
+        # traversed with eachLayer().
+        useLabelgun = False
+        for layer in layer_list:
+            vts = layer.customProperty("VectorTilesReader/vector_tile_url")
+            if (vts is None and
+                    layer.type() == QgsMapLayer.VectorLayer and
+                    layer.labelsEnabled()):
+                labelling = layer.labeling()
+                palyr = labelling.settings() if labelling is not None else None
+                if palyr and palyr.fieldName:
+                    useLabelgun = True
+                    break
+
         dataStore, cssStore = writeFoldersAndFiles(pluginDir, feedback,
                                                    outputProjectFileName,
                                                    cluster, measure,
                                                    matchCRS, layerSearch,
                                                    layerFilter, useOFM, canvas,
-                                                   addressSearch, locate, layersList)
+                                                   addressSearch, locate,
+                                                   layersList, useLabelgun)
         # Collect label buffer info for each layer
         labelBufferCSS = []
         lyrCount = 0
@@ -457,7 +473,8 @@ class LeafletWriter(Writer):
             writeHTMLstart(outputIndex, title, cluster, addressSearch,
                            measure, matchCRS, layerSearch, filterItems, useOFM, canvas,
                            locate, new_src, template, feedback, useMultiStyle,
-                           useHeat, useShapes, useOSMB, useWMS, useWMTS, useVT)
+                           useHeat, useShapes, useOSMB, useWMS, useWMTS, useVT,
+                           useLabelgun)
         except Exception:
             QgsMessageLog.logMessage(traceback.format_exc(),
                                      "qgis2web", level=Qgis.Critical)

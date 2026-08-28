@@ -1151,103 +1151,123 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                               filterItems[item]["type"] + '"')
         endHTML += ",".join(filterList) + "};"
         endHTML += r"""
-        function filterFunc() {
-          var filteredFeatureCount = 0;
-          map.eachLayer(function(lyr){
-          if ("options" in lyr && "dataVar" in lyr["options"]){
-            features = this[lyr["options"]["dataVar"]].features.slice(0);
-            try{
-              for (key in Filters){
-                keyS = key.replace(/[^a-zA-Z0-9_]/g, "")
-                if (Filters[key] == "str" || Filters[key] == "bool"){
-                  var selection = [];
-                  var options = document.getElementById("sel_" + keyS).options
-                  for (var i=0; i < options.length; i++) {
-                    if (options[i].selected) selection.push(options[i].value);
-                  }
-                    try{
-                      if (key in features[0].properties){
-                        for (i = features.length - 1;
-                          i >= 0; --i){
-                          if (selection.indexOf(
-                          features[i].properties[key])<0
-                          && selection.length>0) {
-                          features.splice(i,1);
-                          }
-                        }
-                      }
-                    } catch(err){
-                  }
-                }
-                if (Filters[key] == "int"){
-                  sliderVals =  document.getElementById(
-                    "div_" + keyS).noUiSlider.get();
-                  try{
-                    if (key in features[0].properties){
-                    for (i = features.length - 1; i >= 0; --i){
-                      if (parseInt(features[i].properties[key])
-                          < sliderVals[0]
-                          || parseInt(features[i].properties[key])
-                          > sliderVals[1]){
-                            features.splice(i,1);
-                          }
-                        }
-                      }
-                    } catch(err){
-                    }
-                  }
-                if (Filters[key] == "real"){
-                  sliderVals =  document.getElementById(
-                    "div_" + keyS).noUiSlider.get();
-                  try{
-                    if (key in features[0].properties){
-                    for (i = features.length - 1; i >= 0; --i){
-                      if (features[i].properties[key]
-                          < sliderVals[0]
-                          || features[i].properties[key]
-                          > sliderVals[1]){
-                            features.splice(i,1);
-                          }
-                        }
-                      }
-                    } catch(err){
-                    }
-                  }
-                if (Filters[key] == "date"
-                  || Filters[key] == "datetime"
-                  || Filters[key] == "time"){
-                  try{
-                    if (key in features[0].properties){
-                      HTMLkey = key.replace(/[&\\/\\#,+()$~%.'":*?<>{} ]/g, '');
-                      startdate = document.getElementById("dat_" +
-                        HTMLkey + "_date1").value.replace(" ", "T");
-                      enddate = document.getElementById("dat_" +
-                        HTMLkey + "_date2").value.replace(" ", "T");
-                      for (i = features.length - 1; i >= 0; --i){
-                        if (features[i].properties[key] < startdate
-                          || features[i].properties[key] > enddate){
-                          features.splice(i,1);
-                        }
-                      }
-                    }
-                  } catch(err){
+        var filterTimeout = null;
+        var filtersInitializing = true;
+        var filterableLayers = [];
+        bounds_group.eachLayer(function(lyr) {
+          if (lyr.options && lyr.options.dataVar &&
+              typeof lyr.clearLayers === "function" &&
+              typeof lyr.addData === "function") {
+            filterableLayers.push(lyr);
+          }
+        });
+
+        function setFilteredFeatureCount(count) {
+          var countElement = document.getElementById("filtered-feature-count");
+          if (countElement) {
+            countElement.textContent =
+              "Leválogatott fák darabszáma: " + count;
+          }
+        }
+
+        function readFilterState() {
+          var state = [];
+          Object.keys(Filters).forEach(function(key) {
+            var type = Filters[key];
+            var keyS = key.replace(/[^a-zA-Z0-9_]/g, "");
+            var item = {key: key, type: type};
+            if (type === "str" || type === "bool") {
+              item.selection = [];
+              var select = document.getElementById("sel_" + keyS);
+              if (select) {
+                for (var i = 0; i < select.options.length; i++) {
+                  if (select.options[i].selected && select.options[i].value !== "") {
+                    item.selection.push(select.options[i].value);
                   }
                 }
               }
-            } catch(err){
+            } else if (type === "int" || type === "real") {
+              var slider = document.getElementById("div_" + keyS);
+              if (slider && slider.noUiSlider) {
+                var sliderValues = slider.noUiSlider.get();
+                item.min = parseFloat(sliderValues[0]);
+                item.max = parseFloat(sliderValues[1]);
+              }
+            } else if (type === "date" || type === "datetime" ||
+                       type === "time") {
+              var HTMLkey = key.replace(/[&\\/\\#,+()$~%.'":*?<>{} ]/g, "");
+              var startInput = document.getElementById(
+                "dat_" + HTMLkey + "_date1");
+              var endInput = document.getElementById(
+                "dat_" + HTMLkey + "_date2");
+              item.start = startInput ? startInput.value.replace(" ", "T") : "";
+              item.end = endInput ? endInput.value.replace(" ", "T") : "";
             }
-          filteredFeatureCount += features.length;
-          this[lyr["options"]["layerName"]].clearLayers();
-          this[lyr["options"]["layerName"]].addData(features);
-          """ + labelCode + """
+            state.push(item);
+          });
+          return state;
+        }
+
+        function featureMatchesFilters(feature, filterState) {
+          var properties = feature.properties || {};
+          for (var i = 0; i < filterState.length; i++) {
+            var item = filterState[i];
+            if (!(item.key in properties)) {
+              continue;
+            }
+            var value = properties[item.key];
+            if ((item.type === "str" || item.type === "bool") &&
+                item.selection.length > 0 &&
+                item.selection.indexOf(value) === -1) {
+              return false;
+            }
+            if (item.type === "int" || item.type === "real") {
+              var numericValue = parseFloat(value);
+              if (!isNaN(numericValue) &&
+                  (numericValue < item.min || numericValue > item.max)) {
+                return false;
+              }
+            }
+            if ((item.type === "date" || item.type === "datetime" ||
+                 item.type === "time") && value !== null &&
+                ((item.start && value < item.start) ||
+                 (item.end && value > item.end))) {
+              return false;
+            }
           }
-          })
-          var filteredFeatureCountElement = document.getElementById(
-            "filtered-feature-count");
-          if (filteredFeatureCountElement) {
-            filteredFeatureCountElement.textContent =
-              "Leválogatott fák darabszáma: " + filteredFeatureCount;
+          return true;
+        }
+
+        function applyFilters() {
+          filterTimeout = null;
+          var filterState = readFilterState();
+          var filteredFeatureCount = 0;
+          filterableLayers.forEach(function(lyr) {
+            var sourceData = window[lyr.options.dataVar];
+            if (!sourceData || !Array.isArray(sourceData.features)) {
+              return;
+            }
+            var features = sourceData.features.filter(function(feature) {
+              return featureMatchesFilters(feature, filterState);
+            });
+            filteredFeatureCount += features.length;
+            lyr.clearLayers();
+            lyr.addData({type: "FeatureCollection", features: features});
+          });
+          setFilteredFeatureCount(filteredFeatureCount);
+          if (typeof scheduleLabelReset === "function") {
+            scheduleLabelReset(filterableLayers);
           }
+        }
+
+        function filterFunc() {
+          if (filtersInitializing) {
+            return;
+          }
+          if (filterTimeout !== null) {
+            window.clearTimeout(filterTimeout);
+          }
+          filterTimeout = window.setTimeout(applyFilters, 120);
         }"""
         for item in range(0, filterNum):
             itemName = filterItems[item]["name"]
@@ -1305,6 +1325,7 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                 filterUnit = {
                     "Átmérő": " cm",
                     "Becsült kor": " év",
+                    "Becs. kor": " év",
                 }.get(filterName, "")
                 endHTML += """
             document.getElementById("menu").appendChild(
@@ -1527,7 +1548,15 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         filteredFeatureCountDiv.textContent =
           'Leválogatott fák darabszáma: 0';
         document.getElementById('menu').appendChild(filteredFeatureCountDiv);
-        filterFunc();
+        var initialFeatureCount = 0;
+        filterableLayers.forEach(function(lyr) {
+          var sourceData = window[lyr.options.dataVar];
+          if (sourceData && Array.isArray(sourceData.features)) {
+            initialFeatureCount += sourceData.features.length;
+          }
+        });
+        setFilteredFeatureCount(initialFeatureCount);
+        filtersInitializing = false;
         """
     if useHeat:
         endHTML += """
