@@ -1221,8 +1221,10 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         var filterTimeout = null;
         var filtersInitializing = true;
         var filterableLayers = [];
+        var filterLayerNamePattern = /^layer_fakataszter_\d+$/i;
         bounds_group.eachLayer(function(lyr) {
           if (lyr.options && lyr.options.dataVar &&
+              filterLayerNamePattern.test(lyr.options.layerName || "") &&
               typeof lyr.clearLayers === "function" &&
               typeof lyr.addData === "function") {
             filterableLayers.push(lyr);
