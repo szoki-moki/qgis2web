@@ -116,6 +116,13 @@
 .filterreset.filter-active:active {
     background-color: #991b1b;
 }
+.filterreset-all {
+    display: block;
+    box-sizing: border-box;
+    width: calc(100% - 20px);
+    margin: 8px 10px 0 10px;
+    text-align: center;
+}
 /* name labels now sit directly in #menu, above their control - line them up
    with the .filterselect controls underneath */
 #menu > .filterlabel {

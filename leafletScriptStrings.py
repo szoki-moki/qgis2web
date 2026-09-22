@@ -1125,6 +1125,19 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         filteredFeatureCountDiv.textContent =
           'Leválogatott fák darabszáma: 0';
         filterHeader.appendChild(filteredFeatureCountDiv);
+        var resetAllFilters = document.createElement('button');
+        resetAllFilters.type = 'button';
+        resetAllFilters.className = 'filterreset filterreset-all';
+        resetAllFilters.textContent = 'Összes szűrő törlése';
+        resetAllFilters.addEventListener('click', function() {
+          var resetButtons = col2.querySelectorAll(
+            '.filterreset:not(.filterreset-all)');
+          resetButtons.forEach(function(resetButton) {
+            resetButton.click();
+          });
+          filterFunc();
+        });
+        filterHeader.appendChild(resetAllFilters);
         mapDiv.parentNode.insertBefore(row, mapDiv);
         row.appendChild(col1);
         row.appendChild(filterToggle);
