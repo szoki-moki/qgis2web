@@ -103,6 +103,19 @@
 .filterreset:active {
     background-color: #e0e0e0;
 }
+.filterreset.filter-active {
+    color: #fff;
+    background-color: #c62828;
+    border-color: #b71c1c;
+}
+.filterreset.filter-active:hover {
+    color: #fff;
+    background-color: #b71c1c;
+    border-color: #991b1b;
+}
+.filterreset.filter-active:active {
+    background-color: #991b1b;
+}
 /* name labels now sit directly in #menu, above their control - line them up
    with the .filterselect controls underneath */
 #menu > .filterlabel {

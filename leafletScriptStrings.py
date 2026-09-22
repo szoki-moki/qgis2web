@@ -1332,8 +1332,16 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             sel_{nameS}.multiple = true;
             sel_{nameS}.size = {s};
             sel_{nameS}.id = "sel_{nameS}";
-            var {nameS}_options_str = "<option value='' unselected></option>";
-            sel_{nameS}.onchange = function(){{filterFunc()}};
+            var {nameS}_options_str = "";
+            sel_{nameS}.onchange = function(){{
+                var hasSelection = Array.prototype.some.call(
+                    this.options, function(option) {{
+                        return option.selected && option.value !== "";
+                    }});
+                reset_{nameS}.classList.toggle(
+                    'filter-active', hasSelection);
+                filterFunc();
+            }};
             """.format(name=itemName, nameS=safeName(itemName), s=selSize)
                 for entry in filterItems[item]["values"]:
                     try:
@@ -1355,6 +1363,7 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                 for (var i=0; i < options.length; i++) {{
                     options[i].selected = false;
                 }}
+                reset_{nameS}.classList.remove('filter-active');
                 filterFunc();
             }};
             div_{nameS}.appendChild(reset_{nameS});
@@ -1410,6 +1419,10 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             }}
             val_{nameS} = document.getElementById('val_{nameS}');
             val_{nameS}.innerHTML = values.join(' - ');
+                reset_{nameS}.classList.toggle(
+                    'filter-active',
+                    parseFloat(values[0]) !== {min} ||
+                    parseFloat(values[1]) !== {max});
                 filterFunc()
             }});""".format(name=itemName, nameS=safeName(itemName),
                            min=filterItems[item]["values"][0],
@@ -1427,6 +1440,10 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             sel_{nameS}.noUiSlider.on('update', function (values) {{
             val_{nameS} = document.getElementById('val_{nameS}');
             val_{nameS}.innerHTML = values.join(' - ');
+                reset_{nameS}.classList.toggle(
+                    'filter-active',
+                    parseFloat(values[0]) !== {min} ||
+                    parseFloat(values[1]) !== {max});
                 filterFunc()
             }});
             """.format(name=itemName, nameS=safeName(itemName),
