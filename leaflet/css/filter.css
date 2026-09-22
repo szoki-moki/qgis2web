@@ -74,6 +74,9 @@
     border: 0px;
     /*clear: left;*/
 }
+.filterlabel-name {
+    font-weight: bold;
+}
 .filterlabel + .filterlabel {
     clear: none;
     text-align: right;

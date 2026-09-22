@@ -1334,7 +1334,8 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             document.getElementById("menu").appendChild(
                 document.createElement("div"));
             var lab_{nameS} = document.createElement('div');
-            lab_{nameS}.innerHTML = '{name}';
+            lab_{nameS}.innerHTML =
+                '<span class="filterlabel-name">{name}</span>';
             lab_{nameS}.className = 'filterlabel';
             document.getElementById("menu").appendChild(lab_{nameS});
             var div_{nameS} = document.createElement('div');
@@ -1394,7 +1395,9 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             document.getElementById("menu").appendChild(
                 document.createElement("div"));
             var lab_{nameS} = document.createElement('div');
-            lab_{nameS}.innerHTML  = '{name}: <span id="val_{nameS}"></span>{unit}';
+            lab_{nameS}.innerHTML =
+                '<span class="filterlabel-name">{name}</span>: ' +
+                '<span id="val_{nameS}"></span>{unit}';
             lab_{nameS}.className = 'filterlabel';
             document.getElementById("menu").appendChild(lab_{nameS});
             var div_{nameS} = document.createElement("div");
@@ -1506,7 +1509,8 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
             document.getElementById("menu").appendChild(
                 document.createElement("div"));
             var lab_{nameS}_date1 = document.createElement('div');
-            lab_{nameS}_date1.innerHTML  = '{name} from';
+            lab_{nameS}_date1.innerHTML =
+                '<span class="filterlabel-name">{name}</span> from';
             lab_{nameS}_date1.className = 'filterlabel';
             document.getElementById("menu").appendChild(lab_{nameS}_date1);
             var div_{nameS}_date1 = document.createElement("div");
@@ -1577,7 +1581,8 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                        ss2=ss2)
                 endHTML += """
             var lab_{nameS}_date2 = document.createElement('div');
-            lab_{nameS}_date2.innerHTML  = '{name} till';
+            lab_{nameS}_date2.innerHTML =
+                '<span class="filterlabel-name">{name}</span> till';
             lab_{nameS}_date2.className = 'filterlabel';
             document.getElementById("menu").appendChild(lab_{nameS}_date2);
             var div_{nameS}_date2 = document.createElement("div");
