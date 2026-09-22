@@ -1,6 +1,7 @@
 import re
 import os
 import traceback
+import unicodedata
 from urllib.parse import parse_qs
 from qgis.PyQt.QtCore import QSize, QDateTime
 from qgis.core import (QgsProject,
@@ -1075,7 +1076,21 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         }
         qgis2webInvalidateMapSize();
         """
-    filterItems = sorted(filterItems, key=lambda k: k['type'])
+    filterTypeOrder = {
+        "int": 0,
+        "real": 0,
+        "str": 1,
+        "bool": 1,
+    }
+
+    def filterSortKey(item):
+        filterName = unicodedata.normalize("NFKD", item["name"])
+        filterName = "".join(character for character in filterName
+                             if not unicodedata.combining(character))
+        return (filterTypeOrder.get(item["type"], 2),
+                filterName.casefold(), item["name"].casefold())
+
+    filterItems = sorted(filterItems, key=filterSortKey)
     filterNum = len(filterItems)
     if filterNum != 0:
         endHTML += """
