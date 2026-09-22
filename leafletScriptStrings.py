@@ -1239,6 +1239,13 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
           }
         }
 
+        function updateResetAllFilterState() {
+          var hasActiveFilter = col2.querySelector(
+            '.filterreset.filter-active:not(.filterreset-all)') !== null;
+          resetAllFilters.classList.toggle(
+            'filter-active', hasActiveFilter);
+        }
+
         function readFilterState() {
           var state = [];
           Object.keys(Filters).forEach(function(key) {
@@ -1330,6 +1337,7 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         }
 
         function filterFunc() {
+          updateResetAllFilterState();
           if (filtersInitializing) {
             return;
           }
@@ -1554,7 +1562,9 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                     timeStepMinutes:1,
                     timeStepSeconds: 1
                 }}).selectDate({Y1},{M1}-1,{D1},{hh1},{mm1},{ss1});
-                tail.DateTime("#dat_{nameS}_date1").reload()
+                tail.DateTime("#dat_{nameS}_date1").reload();
+                reset_{nameS}_date1.classList.remove('filter-active');
+                filterFunc();
             }}
             document.getElementById("div_{nameS}_date1").appendChild(
                 reset_{nameS}_date1);
@@ -1588,10 +1598,24 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                     timeStepMinutes:1,
                     timeStepSeconds: 1
                 }}).selectDate({Y2},{M2}-1,{D2},{hh2},{mm2},{ss2});
-                tail.DateTime("#dat_{nameS}_date2").reload()
-                filterFunc()
-                dat_{nameS}_date1.onchange = function(){{filterFunc()}};
-                dat_{nameS}_date2.onchange = function(){{filterFunc()}};
+                tail.DateTime("#dat_{nameS}_date2").reload();
+                dat_{nameS}_date1.dataset.filterDefault =
+                    dat_{nameS}_date1.value;
+                dat_{nameS}_date2.dataset.filterDefault =
+                    dat_{nameS}_date2.value;
+                filterFunc();
+                dat_{nameS}_date1.onchange = function(){{
+                    reset_{nameS}_date1.classList.toggle(
+                        'filter-active',
+                        this.value !== this.dataset.filterDefault);
+                    filterFunc();
+                }};
+                dat_{nameS}_date2.onchange = function(){{
+                    reset_{nameS}_date2.classList.toggle(
+                        'filter-active',
+                        this.value !== this.dataset.filterDefault);
+                    filterFunc();
+                }};
             }});
             """.format(name=itemName, nameS=safeName(itemName), de=de, ds=ds,
                        d=d, t=t, Y2=Y2, M2=M2, D2=D2, hh2=hh2, mm2=mm2,
@@ -1626,7 +1650,9 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                     timeStepMinutes:1,
                     timeStepSeconds: 1
                 }}).selectDate({Y2},{M2}-1,{D2},{hh2},{mm2},{ss2});
-                tail.DateTime("#dat_{nameS}_date2").reload()
+                tail.DateTime("#dat_{nameS}_date2").reload();
+                reset_{nameS}_date2.classList.remove('filter-active');
+                filterFunc();
             }}
             document.getElementById("div_{nameS}_date2").appendChild(
                 reset_{nameS}_date2);

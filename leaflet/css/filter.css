@@ -107,17 +107,17 @@
     background-color: #e0e0e0;
 }
 .filterreset.filter-active {
-    color: #fff;
-    background-color: #c62828;
-    border-color: #b71c1c;
+    color: #7f2828;
+    background-color: #f4c7c7;
+    border-color: #d98f8f;
 }
 .filterreset.filter-active:hover {
-    color: #fff;
-    background-color: #b71c1c;
-    border-color: #991b1b;
+    color: #722222;
+    background-color: #edb5b5;
+    border-color: #cb7777;
 }
 .filterreset.filter-active:active {
-    background-color: #991b1b;
+    background-color: #e6a3a3;
 }
 .filterreset-all {
     display: block;

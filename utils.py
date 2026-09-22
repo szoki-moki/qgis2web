@@ -1056,8 +1056,13 @@ def returnFilterValues(layer_list, fieldName, fieldType):
                     if f.name() == fieldName:
                         iterator = layer.getFeatures()
                         for feature in iterator:
-                            if feature[fieldName] is not None:
-                                filterValues.append(feature[fieldName])
+                            value = feature[fieldName]
+                            try:
+                                isNull = value is None or QVariant(value).isNull()
+                            except (TypeError, AttributeError):
+                                isNull = value is None
+                            if not isNull:
+                                filterValues.append(value)
     if filterValues == []:
         return
     if fieldType == "str":
