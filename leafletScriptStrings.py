@@ -1365,6 +1365,8 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                     "Átmérő": " cm",
                     "Becsült kor": " év",
                     "Becs. kor": " év",
+                    "Magasság": " m",
+                    "Kor": " év",
                 }.get(filterName, "")
                 endHTML += """
             document.getElementById("menu").appendChild(
