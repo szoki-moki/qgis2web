@@ -1092,6 +1092,9 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         col2.id = "menu";
         col2.setAttribute('role', 'complementary');
         col2.setAttribute('aria-label', 'Szűrők');
+        var filterHeader = document.createElement('div');
+        filterHeader.className = 'filter-header';
+        col2.appendChild(filterHeader);
         var filterToggle = document.createElement('button');
         filterToggle.type = 'button';
         filterToggle.className = 'qgis2web-filter-toggle';
@@ -1106,15 +1109,22 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
         filterClose.className = 'qgis2web-filter-close';
         filterClose.setAttribute('aria-label', 'Szűrők bezárása');
         filterClose.innerHTML = '&times;';
-        col2.appendChild(filterClose);
+        filterHeader.appendChild(filterClose);
         var menuTitle = document.createElement('h2');
         menuTitle.className = "menu-title";
         menuTitle.textContent = "Leválogatás";
-        col2.appendChild(menuTitle);
+        filterHeader.appendChild(menuTitle);
         var menuSubtitle = document.createElement('h3');
         menuSubtitle.className = "menu-subtitle";
         menuSubtitle.textContent = "Különböző szempontok szerint";
-        col2.appendChild(menuSubtitle);
+        filterHeader.appendChild(menuSubtitle);
+        var filteredFeatureCountDiv = document.createElement('div');
+        filteredFeatureCountDiv.id = 'filtered-feature-count';
+        filteredFeatureCountDiv.className = 'filtercount';
+        filteredFeatureCountDiv.setAttribute('aria-live', 'polite');
+        filteredFeatureCountDiv.textContent =
+          'Leválogatott fák darabszáma: 0';
+        filterHeader.appendChild(filteredFeatureCountDiv);
         mapDiv.parentNode.insertBefore(row, mapDiv);
         row.appendChild(col1);
         row.appendChild(filterToggle);
@@ -1570,13 +1580,6 @@ def endHTMLscript(wfsLayers, layerSearch, filterItems, labelCode, labels,
                        d=d, t=t, Y2=Y2, M2=M2, D2=D2, hh2=hh2, mm2=mm2,
                        ss2=ss2)
         endHTML += """
-        var filteredFeatureCountDiv = document.createElement('div');
-        filteredFeatureCountDiv.id = 'filtered-feature-count';
-        filteredFeatureCountDiv.className = 'filtercount';
-        filteredFeatureCountDiv.setAttribute('aria-live', 'polite');
-        filteredFeatureCountDiv.textContent =
-          'Leválogatott fák darabszáma: 0';
-        document.getElementById('menu').appendChild(filteredFeatureCountDiv);
         var initialFeatureCount = 0;
         filterableLayers.forEach(function(lyr) {
           var sourceData = window[lyr.options.dataVar];

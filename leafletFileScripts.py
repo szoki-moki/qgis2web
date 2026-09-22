@@ -389,12 +389,15 @@ def writeCSS(cssStore, backgroundColor, feedback, widgetAccent,
                 max-width: calc(100vw - 44px);
                 height: 100vh;
                 height: 100dvh;
-                padding-top: calc(54px + env(safe-area-inset-top));
+                padding-top: 0;
                 padding-right: env(safe-area-inset-right);
                 transform: translateX(105%);
                 visibility: hidden;
                 box-shadow: -8px 0 28px rgba(0, 0, 0, 0.24);
                 transition: transform 220ms ease, visibility 0s linear 220ms;
+            }
+            .qgis2web-filter-panel#menu .filter-header {
+                padding-top: calc(54px + env(safe-area-inset-top));
             }
             .qgis2web-filter-toggle {
                 position: fixed;
